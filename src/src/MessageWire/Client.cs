@@ -148,7 +148,7 @@ namespace MessageWire
             if (_sendQueue.TryDequeue(out message))
             {
                 e.Socket.SendMultipartMessage(message);
-                _sentEvent?.Invoke(this, new MessageEventArgs { Message = message.ToMessageWithClientFrame() });
+                _sentEvent?.Invoke(this, new MessageEventArgs { Message = message.ToMessageWithoutClientFrame(_clientId) });
             }
         }
 

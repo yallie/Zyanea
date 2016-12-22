@@ -1,13 +1,22 @@
 ﻿{
   "version": "1.0.0-*",
+  /*  "buildOptions": {
+    "emitEntryPoint": true
+  }, */
+  "testRunner": "xunit",
 
   "dependencies": {
     "MessageWire": "1.0.0-*",
-    "NETStandard.Library": "1.6.1",
+    "Microsoft.NETCore.App": {
+      "type": "platform",
+      "version": "1.0.1"
+    },
+    "xunit": "2.2.0-beta4-build3444",
+    "dotnet-test-xunit": "2.2.0-preview2-build1029"
   },
 
   "frameworks": {
-    "netstandard1.3": {
+    "netcoreapp1.0": {
       "imports": "dnxcore50"
     }
   }

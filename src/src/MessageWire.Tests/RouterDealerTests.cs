@@ -4,13 +4,19 @@ using System.Linq;
 using System.Threading.Tasks;
 using MessageWire;
 using System.Text;
+using Xunit;
+using System.Threading;
 
 namespace MessageWire.Tests
 {
     public class RouterDealerTests
     {
+        [Fact]
         public void TestSomething()
         {
+            var serverSent = false;
+            var clientSent = false;
+            var clientReceived = false;
             var connString = "tcp://127.0.0.1:5800";
             using (var server = new Host(connString))
             {
@@ -25,6 +31,9 @@ namespace MessageWire.Tests
                     replyData.Add(Encoding.UTF8.GetBytes("Hello, I'm the server. You sent."));
                     replyData.AddRange(msg.Frames);
                     server.Send(msg.ClientId, replyData);
+                    serverSent = true;
+                    Assert.True(msg.Frames.Count == 2, "Server received message did not have 2 frames.");
+                    Assert.True(replyData.Count == 3, "Server message did not have 3 frames.");
                 };
 
                 using (var client = new Client("me", "mykey", connString))
@@ -35,6 +44,8 @@ namespace MessageWire.Tests
                         {
                             throw new Exception("message null");
                         }
+                        clientSent = true;
+                        Assert.True(e.Message.Frames.Count == 2, "Sent message did not have 2 frames.");
                     };
 
                     client.MessageReceived += (s, e) =>
@@ -43,6 +54,8 @@ namespace MessageWire.Tests
                         {
                             throw new Exception("message null");
                         }
+                        clientReceived = true;
+                        Assert.True(e.Message.Frames.Count == 3, "Received message did not have 3 frames.");
                     };
 
                     var clientMessageData = new List<byte[]>();
@@ -50,8 +63,16 @@ namespace MessageWire.Tests
                     clientMessageData.Add(Encoding.UTF8.GetBytes("This is my second line."));
                     client.Send(clientMessageData);
 
-                    Console.WriteLine("hit enter to quit waiting");
-                    Console.ReadLine();
+                    var count = 0;
+                    if (count < 20 && (!clientReceived || !clientSent || !serverSent))
+                    {
+                        Thread.Sleep(200);
+                        count++;
+                    }
+                    Assert.True(count < 100, "Test took too long.");
+                    Assert.True(clientSent, "Client failed to sent.");
+                    Assert.True(clientReceived, "Client failed to receive.");
+                    Assert.True(serverSent, "Server failed to send.");
                 }
             }
         }
