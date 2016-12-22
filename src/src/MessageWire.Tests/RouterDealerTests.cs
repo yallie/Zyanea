@@ -64,9 +64,9 @@ namespace MessageWire.Tests
                     client.Send(clientMessageData);
 
                     var count = 0;
-                    if (count < 20 && (!clientReceived || !clientSent || !serverSent))
+                    while (count < 20 && (!clientReceived || !clientSent || !serverSent))
                     {
-                        Thread.Sleep(200);
+                        Thread.Sleep(20);
                         count++;
                     }
                     Assert.True(count < 100, "Test took too long.");
