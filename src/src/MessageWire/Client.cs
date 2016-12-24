@@ -16,15 +16,14 @@ namespace MessageWire
         private readonly string _key;
         private readonly string _connectionString;
 
-        private readonly string _instanceId;
-        private readonly string _clientId;
+        private readonly Guid _clientId;
         private readonly byte[] _clientIdBytes;
 
-        protected bool _isOpen = false;
-        private DealerSocket _socket = null;
-        private NetMQPoller _poller = null;
-        private readonly ConcurrentQueue<NetMQMessage> _sendQueue;
-        private readonly ConcurrentQueue<NetMQMessage> _receivedQueue;
+        private DealerSocket _dealerSocket = null;
+        private NetMQPoller _sendPoller = null;
+        private NetMQPoller _receivePoller = null;
+        private readonly NetMQQueue<List<byte[]>> _sendQueue;
+        private readonly NetMQQueue<List<byte[]>> _receivedQueue;
 
         /// <summary>
         /// Client constructor.
@@ -38,55 +37,49 @@ namespace MessageWire
             _id = id ?? Dns.GetHostName();
             _key = key ?? ".";
             _connectionString = connectionString;
-            _sendQueue = new ConcurrentQueue<NetMQMessage>();
-            _receivedQueue = new ConcurrentQueue<NetMQMessage>();
 
-            _instanceId = Guid.NewGuid().ToString("N");
-            _clientId = $"{_id}|{_instanceId}";
-            _clientIdBytes = Encoding.UTF8.GetBytes(_clientId);
+            _clientId = Guid.NewGuid();
+            _clientIdBytes = _clientId.ToByteArray();
 
-            _isOpen = true;
-            _socket = new DealerSocket(_connectionString);
-            _socket.Options.Identity = _clientIdBytes;
-            _poller = new NetMQPoller { _socket };
-            _socket.ReceiveReady += _socket_ReceiveReady;
-            _socket.SendReady += _socket_SendReady;
-            _poller.RunAsync();
+            _sendQueue = new NetMQQueue<List<byte[]>>();
+            _dealerSocket = new DealerSocket(_connectionString);
+            _dealerSocket.Options.Identity = _clientIdBytes;
+            _sendQueue.ReceiveReady += _sendQueue_ReceiveReady;
+            _dealerSocket.ReceiveReady += _socket_ReceiveReady;
+            _sendPoller = new NetMQPoller { _dealerSocket, _sendQueue };
+            _sendPoller.RunAsync();
+
+            _receivedQueue = new NetMQQueue<List<byte[]>>();
+            _receivedQueue.ReceiveReady += _receivedQueue_ReceiveReady;
+            _receivePoller = new NetMQPoller { _receivedQueue };
+            _receivePoller.RunAsync();
         }
 
-        public int InBoxCount { get { return _receivedQueue.Count; } }
-        public int OutBoxCount { get { return _sendQueue.Count; } }
+        private void _receivedQueue_ReceiveReady(object sender, NetMQQueueEventArgs<List<byte[]>> e)
+        {
+            List<byte[]> frames;
+            if (e.Queue.TryDequeue(out frames, new TimeSpan(1000)))
+            {
+                _receivedEvent?.Invoke(this, new MessageEventArgs
+                {
+                    Message = new Message
+                    {
+                        ClientId = _clientId,
+                        Frames = frames
+                    }
+                });
+            }
+        }
 
-        public string InstanceId { get { return _instanceId; } }
-        public string ClientId { get { return _clientId; } }
+        public Guid ClientId { get { return _clientId; } }
 
         private EventHandler<MessageEventArgs> _receivedEvent;
-        private EventHandler<MessageEventArgs> _sentEvent;
-        private EventHandler<EventArgs> _receivedIntoQueueEvent;
-
-        /// <summary>
-        /// This event occurs when a message has been received into the received queue.
-        /// </summary>
-        /// <remarks>To get the event, call the TryReceive method. This handler will run on the same thread as 
-        /// the thread handling the IO. Care should be taken to make processing very quick or offload the work 
-        /// onto another thread or task.</remarks>
-        public event EventHandler<EventArgs> MessageReceivedIntoQueue {
-            add {
-                _receivedIntoQueueEvent += value;
-            }
-            remove {
-                _receivedIntoQueueEvent -= value;
-            }
-        }
 
         /// <summary>
         /// This event occurs when a message has been received. 
         /// </summary>
-        /// <remarks>This handler will run on the same thread as the thread handling the IO. Care should be taken to make 
-        /// processing very quick or offload the work onto another thread or task. Any subscription to this event will prevent incoming 
-        /// messages from being enqued and the TryReceive method will always return false and output a null Message. 
-        /// Rather the message will be included in the event arguments and must be handled there. Once the event handler
-        /// returns, the message will no longer be accessible.</remarks>
+        /// <remarks>This handler is thread safe occuring on a thread other 
+        /// than the thread sendign and receiving messages over the wire.</remarks>
         public event EventHandler<MessageEventArgs> MessageReceived {
             add {
                 _receivedEvent += value;
@@ -96,79 +89,41 @@ namespace MessageWire
             }
         }
 
-        /// <summary>
-        /// This event occurs when a message has been sent.
-        /// </summary>
-        /// <remarks>This handler will run on the same thread as the thread handling the IO. Care should be taken to make 
-        /// processing very quick or offload the work onto another thread or task.</remarks>
-        public event EventHandler<MessageEventArgs> MessageSent {
-            add {
-                _sentEvent += value;
-            }
-            remove {
-                _sentEvent -= value;
-            }
-        }
-
-
         public void Send(List<byte[]> frames)
         {
-            if (null == frames || frames.Count == 0) throw new ArgumentException("Cannot be null or empty.", nameof(frames));
+            if (_disposed) throw new ObjectDisposedException("Client", "Cannot send on disposed client.");
+            if (null == frames || frames.Count == 0)
+            {
+                throw new ArgumentException("Cannot be null or empty.", nameof(frames));
+            }
+            _sendQueue.Enqueue(frames);
+        }
+
+        //Executes on same poller thread as dealer socket, so we can send directly
+        private void _sendQueue_ReceiveReady(object sender, NetMQQueueEventArgs<List<byte[]>> e)
+        {
             var message = new NetMQMessage();
-            //this may be automagically added by DealerSocket
-            //message.Append(_clientIdBytes);
             message.AppendEmptyFrame();
-            if (null != frames && frames.Count > 0)
+            List<byte[]> frames;
+            if (e.Queue.TryDequeue(out frames, new TimeSpan(1000)))
             {
-                foreach (var frame in frames) message.Append(frame);
-            }
-            else
-            {
-                message.AppendEmptyFrame();
-            }
-            _sendQueue.Enqueue(message);
-        }
-
-        public bool TryReceive(out Message message)
-        {
-            NetMQMessage msg;
-            if (_receivedQueue.TryDequeue(out msg))
-            {
-                message = msg.ToMessageWithoutClientFrame(_clientId);
-                return true;
-            }
-            message = null;
-            return false;
-        }
-
-        //occurs on the poller thread
-        private void _socket_SendReady(object sender, NetMQSocketEventArgs e)
-        {
-            NetMQMessage message;
-            if (_sendQueue.TryDequeue(out message))
-            {
-                e.Socket.SendMultipartMessage(message);
-                _sentEvent?.Invoke(this, new MessageEventArgs { Message = message.ToMessageWithoutClientFrame(_clientId) });
+                foreach (var frame in frames)
+                {
+                    message.Append(frame);
+                }
+                _dealerSocket.SendMultipartMessage(message);
             }
         }
 
-        //occurs on the poller thread
+        //Executes on same poller thread as dealer socket, so we enqueue to the received queue
+        //and raise the event on the poller thread for received queue
         private void _socket_ReceiveReady(object sender, NetMQSocketEventArgs e)
         {
-            var message = e.Socket.ReceiveMultipartMessage();
-            //do something with message - put it on a queue and raise event if subscribed
-            //raise event only or add to queue and raise
-            if (null != _receivedEvent)
-            {
-                _receivedEvent.Invoke(this, new MessageEventArgs { Message = message.ToMessageWithoutClientFrame(_clientId) });
-            }
-            else
-            {
-                _receivedQueue.Enqueue(message);
-                _receivedIntoQueueEvent?.Invoke(this, new EventArgs());
-            }
+            var msg = e.Socket.ReceiveMultipartMessage();
+            var message = msg.ToMessageWithoutClientFrame(_clientId);
+            _receivedQueue.Enqueue(message.Frames);
         }
-
+        
         #region IDisposable Members
 
         private bool _disposed = false;
@@ -187,9 +142,12 @@ namespace MessageWire
                 _disposed = true; //prevent second call to Dispose
                 if (disposing)
                 {
-                    if (null != _poller) _poller.Dispose();
-                    if (null == _socket) _socket.Dispose();
-                    _isOpen = false;
+                    if (null != _sendPoller) _sendPoller.Dispose();
+                    if (null != _sendQueue) _sendQueue.Dispose();
+                    if (null != _dealerSocket) _dealerSocket.Dispose();
+
+                    if (null != _receivePoller) _receivePoller.Dispose();
+                    if (null != _receivedQueue) _receivedQueue.Dispose();
                 }
             }
         }

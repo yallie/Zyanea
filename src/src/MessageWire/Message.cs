@@ -9,13 +9,13 @@ namespace MessageWire
 {
     public class Message
     {
-        public string ClientId { get; set; }
+        public Guid ClientId { get; set; }
         public List<byte[]> Frames { get; set; }
     }
 
     internal static class MessageExtensions
     {
-        public static Message ToMessageWithoutClientFrame(this NetMQMessage msg, string clientId)
+        public static Message ToMessageWithoutClientFrame(this NetMQMessage msg, Guid clientId)
         {
             if (msg == null || msg.FrameCount == 0) return null;
             List<byte[]> frames = new List<byte[]>();
@@ -33,7 +33,8 @@ namespace MessageWire
         public static Message ToMessageWithClientFrame(this NetMQMessage msg)
         {
             if (msg == null || msg.FrameCount == 0) return null;
-            var clientId = msg[0].ConvertToString(Encoding.UTF8);
+            if (msg[0].BufferSize != 16) return null; //must have a Guid id
+            var clientId = new Guid(msg[0].Buffer);
             List<byte[]> frames = new List<byte[]>();
             if (msg.FrameCount > 1)
             {
@@ -49,7 +50,7 @@ namespace MessageWire
         public static NetMQMessage ToNetMQMessage(this Message msg)
         {
             var message = new NetMQMessage();
-            message.Append(Encoding.UTF8.GetBytes(msg.ClientId));
+            message.Append(msg.ClientId.ToByteArray());
             message.AppendEmptyFrame();
             if (null != msg.Frames)
             {
@@ -73,9 +74,13 @@ namespace MessageWire
 
     public class MessageEventFailureArgs : EventArgs
     {
+        public MessageFailure Failure { get; set; }
+    }
+
+    public class MessageFailure
+    {
         public string ErrorMessage { get; set; }
         public string ErrorCode { get; set; }
         public Message Message { get; set; }
     }
-
 }

@@ -12,12 +12,13 @@ namespace MessageWire
 {
     public class Host : IDisposable
     {
-        protected bool _isOpen = false;
         private readonly string _connectionString;
-        private RouterSocket _socket = null;
-        private NetMQPoller _poller = null;
-        private readonly ConcurrentQueue<NetMQMessage> _sendQueue;
-        private readonly ConcurrentQueue<NetMQMessage> _receivedQueue;
+        private RouterSocket _routerSocket = null;
+        private NetMQPoller _socketPoller = null;
+        private NetMQPoller _hostPoller = null;
+        private readonly NetMQQueue<NetMQMessage> _sendQueue;
+        private readonly NetMQQueue<Message> _receivedQueue;
+        private readonly NetMQQueue<MessageFailure> _sendFailureQueue;
 
         /// <summary>
         /// Host constructor.
@@ -26,48 +27,32 @@ namespace MessageWire
         public Host(string connectionString)
         {
             _connectionString = connectionString;
-            _sendQueue = new ConcurrentQueue<NetMQMessage>();
-            _receivedQueue = new ConcurrentQueue<NetMQMessage>();
-            _isOpen = true;
-            _socket = new RouterSocket(_connectionString);
-            _socket.Options.RouterMandatory = true;
-            _poller = new NetMQPoller { _socket };
-            _socket.ReceiveReady += _socket_ReceiveReady;
-            _socket.SendReady += _socket_SendReady;
-            _poller.RunAsync();
-        }
+            _sendQueue = new NetMQQueue<NetMQMessage>();
 
-        public int InBoxCount { get { return _receivedQueue.Count; } }
-        public int OutBoxCount { get { return _sendQueue.Count; } }
+            _routerSocket = new RouterSocket(_connectionString);
+            _routerSocket.Options.RouterMandatory = true;
+            _sendQueue.ReceiveReady += _sendQueue_ReceiveReady;
+            _routerSocket.ReceiveReady += _socket_ReceiveReady;
+            _socketPoller = new NetMQPoller { _routerSocket, _sendQueue };
+            _socketPoller.RunAsync();
+
+            _sendFailureQueue = new NetMQQueue<MessageFailure>();
+            _receivedQueue = new NetMQQueue<Message>();
+            _sendFailureQueue.ReceiveReady += _sendFailureQueue_ReceiveReady;
+            _receivedQueue.ReceiveReady += _receivedQueue_ReceiveReady;
+            _hostPoller = new NetMQPoller { _receivedQueue, _sendFailureQueue };
+            _hostPoller.RunAsync();
+        }
 
         private EventHandler<MessageEventFailureArgs> _sentFailureEvent;
         private EventHandler<MessageEventArgs> _receivedEvent;
         private EventHandler<MessageEventArgs> _sentEvent;
-        private EventHandler<EventArgs> _receivedIntoQueueEvent;
-
-        /// <summary>
-        /// This event occurs when a message has been received into the received queue.
-        /// </summary>
-        /// <remarks>To get the event, call the TryReceive method. This handler will run on the same thread as 
-        /// the thread handling the IO. Care should be taken to make processing very quick or offload the work 
-        /// onto another thread or task.</remarks>
-        public event EventHandler<EventArgs> MessageReceivedIntoQueue {
-            add {
-                _receivedIntoQueueEvent += value;
-            }
-            remove {
-                _receivedIntoQueueEvent -= value;
-            }
-        }
 
         /// <summary>
         /// This event occurs when a message has been received. 
         /// </summary>
-        /// <remarks>This handler will run on the same thread as the thread handling the IO. Care should be taken to make 
-        /// processing very quick or offload the work onto another thread or task. Any subscription to this event will prevent incoming 
-        /// messages from being enqued and the TryReceive method will always return false and output a null Message. 
-        /// Rather the message will be included in the event arguments and must be handled there. Once the event handler
-        /// returns, the message will no longer be accessible.</remarks>
+        /// <remarks>This handler will run on a different thread than the socket poller and
+        /// blocking on this thread will not block sending and receiving.</remarks>
         public event EventHandler<MessageEventArgs> MessageReceived {
             add {
                 _receivedEvent += value;
@@ -78,24 +63,10 @@ namespace MessageWire
         }
 
         /// <summary>
-        /// This event occurs when a message has been sent.
-        /// </summary>
-        /// <remarks>This handler will run on the same thread as the thread handling the IO. Care should be taken to make 
-        /// processing very quick or offload the work onto another thread or task.</remarks>
-        public event EventHandler<MessageEventArgs> MessageSent {
-            add {
-                _sentEvent += value;
-            }
-            remove {
-                _sentEvent -= value;
-            }
-        }
-
-        /// <summary>
         /// This event occurs when a message failed to send because the client is no longer connected.
         /// </summary>
-        /// <remarks>This handler will run on the same thread as the thread handling the IO. Care should be taken to make 
-        /// processing very quick or offload the work onto another thread or task.</remarks>
+        /// <remarks>This handler will run on a different thread than the socket poller and
+        /// blocking on this thread will not block sending and receiving.</remarks>
         public event EventHandler<MessageEventFailureArgs> MessageSentFailure {
             add {
                 _sentFailureEvent += value;
@@ -105,79 +76,75 @@ namespace MessageWire
             }
         }
 
-        public void Send(string clientId, List<byte[]> frames)
+        public void Send(Guid clientId, List<byte[]> frames)
         {
-            if (null == clientId) throw new ArgumentNullException(nameof(clientId), "Cannot be null.");
-            if (null == frames || frames.Count == 0) throw new ArgumentException("Cannot be null or empty.", nameof(frames));
-            var clientIdBytes = Encoding.UTF8.GetBytes(clientId);
+            if (_disposed) throw new ObjectDisposedException("Client", "Cannot send on disposed client.");
+            if (null == frames || frames.Count == 0)
+            {
+                throw new ArgumentException("Cannot be null or empty.", nameof(frames));
+            }
             var message = new NetMQMessage();
-            message.Append(clientIdBytes);
+            message.Append(clientId.ToByteArray());
             message.AppendEmptyFrame();
-            if (null != frames && frames.Count > 0)
-            {
-                foreach (var frame in frames) message.Append(frame);
-            }
-            else
-            {
-                message.AppendEmptyFrame();
-            }
-            _sendQueue.Enqueue(message);
+            foreach (var frame in frames) message.Append(frame);
+            _sendQueue.Enqueue(message); //send by message to socket poller
         }
 
-        public bool TryReceive(out Message message)
-        {
-            NetMQMessage msg;
-            if (_receivedQueue.TryDequeue(out msg))
-            {
-                message = msg.ToMessageWithClientFrame();
-                return true;
-            }
-            message = null;
-            return false;
-        }
-
-        //occurs on the poller thread
-        private void _socket_SendReady(object sender, NetMQSocketEventArgs e)
+        //occurs on socket polling thread to assure sending and receiving on same thread
+        private void _sendQueue_ReceiveReady(object sender, NetMQQueueEventArgs<NetMQMessage> e)
         {
             NetMQMessage message;
-            if (_sendQueue.TryDequeue(out message))
+            if (e.Queue.TryDequeue(out message, new TimeSpan(1000)))
             {
                 try
                 {
-                    e.Socket.SendMultipartMessage(message);
+                    _routerSocket.SendMultipartMessage(message);
                 }
                 catch (HostUnreachableException ex) //clientId not found or other error, raise event
                 {
-                    _sentFailureEvent?.Invoke(this, new MessageEventFailureArgs
+                    //send by message to host poller
+                    _sendFailureQueue.Enqueue(new MessageFailure
                     {
                         Message = message.ToMessageWithClientFrame(),
                         ErrorCode = ex.ErrorCode.ToString(),
                         ErrorMessage = ex.Message
                     });
                 }
-                _sentEvent?.Invoke(this, new MessageEventArgs { Message = message.ToMessageWithClientFrame() });
             }
         }
 
-        //occurs on the poller thread
+        //occurs on socket polling thread to assure sending and receiving on same thread
         private void _socket_ReceiveReady(object sender, NetMQSocketEventArgs e)
         {
-            var message = e.Socket.ReceiveMultipartMessage();
-            //do something with message - put it on a queue and raise event if subscribed
-            _receivedQueue.Enqueue(message);
-            //raise event only or add to queue and raise
-            if (null != _receivedEvent)
-            {
-                _receivedEvent.Invoke(this, new MessageEventArgs { Message = message.ToMessageWithClientFrame() });
-            }
-            else
-            {
-                _receivedQueue.Enqueue(message);
-                _receivedIntoQueueEvent?.Invoke(this, new EventArgs());
-            }
+            var msg = e.Socket.ReceiveMultipartMessage();
+            var message = msg.ToMessageWithClientFrame();
+            _receivedQueue.Enqueue(message); //sends by message to host poller
+        }
 
-            //NetworkOrderBitsConverter.GetBytes()
-            //NetworkOrderBitsConverter.ToInt16(buf)
+        //occurs on host polling thread to allow sending and receiving on a different thread
+        private void _sendFailureQueue_ReceiveReady(object sender, NetMQQueueEventArgs<MessageFailure> e)
+        {
+            MessageFailure mf;
+            if (e.Queue.TryDequeue(out mf, new TimeSpan(1000)))
+            {
+                _sentFailureEvent?.Invoke(this, new MessageEventFailureArgs
+                {
+                    Failure = mf
+                });
+            }
+        }
+
+        //occurs on host polling thread to allow sending and receiving on a different thread
+        private void _receivedQueue_ReceiveReady(object sender, NetMQQueueEventArgs<Message> e)
+        {
+            Message message;
+            if (e.Queue.TryDequeue(out message, new TimeSpan(1000)))
+            {
+                _receivedEvent?.Invoke(this, new MessageEventArgs
+                {
+                    Message = message
+                });
+            }
         }
 
         #region IDisposable Members
@@ -198,9 +165,13 @@ namespace MessageWire
                 _disposed = true; //prevent second call to Dispose
                 if (disposing)
                 {
-                    if (null != _poller) _poller.Dispose();
-                    if (null == _socket) _socket.Dispose();
-                    _isOpen = false;
+                    if (null != _socketPoller) _socketPoller.Dispose();
+                    if (null != _sendQueue) _sendQueue.Dispose();
+                    if (null != _routerSocket) _routerSocket.Dispose();
+
+                    if (null != _hostPoller) _hostPoller.Dispose();
+                    if (null != _receivedQueue) _receivedQueue.Dispose();
+                    if (null != _sendFailureQueue) _sendFailureQueue.Dispose();
                 }
             }
         }

@@ -14,46 +14,26 @@ namespace MessageWire.Tests
         [Fact]
         public void TestSomething()
         {
-            var serverSent = false;
-            var clientSent = false;
+            var serverReceived = false;
             var clientReceived = false;
             var connString = "tcp://127.0.0.1:5800";
             using (var server = new Host(connString))
             {
-                server.MessageReceivedIntoQueue += (s, e) =>
+                server.MessageReceived += (s, e) =>
                 {
-                    Message msg;
-                    if (!server.TryReceive(out msg))
-                    {
-                        throw new Exception("no message in queue");
-                    }
                     var replyData = new List<byte[]>();
                     replyData.Add(Encoding.UTF8.GetBytes("Hello, I'm the server. You sent."));
-                    replyData.AddRange(msg.Frames);
-                    server.Send(msg.ClientId, replyData);
-                    serverSent = true;
-                    Assert.True(msg.Frames.Count == 2, "Server received message did not have 2 frames.");
+                    replyData.AddRange(e.Message.Frames);
+                    server.Send(e.Message.ClientId, replyData);
+                    serverReceived = true;
+                    Assert.True(e.Message.Frames.Count == 2, "Server received message did not have 2 frames.");
                     Assert.True(replyData.Count == 3, "Server message did not have 3 frames.");
                 };
 
                 using (var client = new Client("me", "mykey", connString))
                 {
-                    client.MessageSent += (s, e) =>
-                    {
-                        if (null == e.Message)
-                        {
-                            throw new Exception("message null");
-                        }
-                        clientSent = true;
-                        Assert.True(e.Message.Frames.Count == 2, "Sent message did not have 2 frames.");
-                    };
-
                     client.MessageReceived += (s, e) =>
                     {
-                        if (null == e.Message)
-                        {
-                            throw new Exception("message null");
-                        }
                         clientReceived = true;
                         Assert.True(e.Message.Frames.Count == 3, "Received message did not have 3 frames.");
                     };
@@ -64,15 +44,14 @@ namespace MessageWire.Tests
                     client.Send(clientMessageData);
 
                     var count = 0;
-                    while (count < 20 && (!clientReceived || !clientSent || !serverSent))
+                    while (count < 20 && (!clientReceived || !serverReceived))
                     {
                         Thread.Sleep(20);
                         count++;
                     }
                     Assert.True(count < 100, "Test took too long.");
-                    Assert.True(clientSent, "Client failed to sent.");
+                    Assert.True(serverReceived, "Server failed to receive and send.");
                     Assert.True(clientReceived, "Client failed to receive.");
-                    Assert.True(serverSent, "Server failed to send.");
                 }
             }
         }
