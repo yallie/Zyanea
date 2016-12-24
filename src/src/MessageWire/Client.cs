@@ -20,10 +20,10 @@ namespace MessageWire
         private readonly byte[] _clientIdBytes;
 
         private DealerSocket _dealerSocket = null;
-        private NetMQPoller _sendPoller = null;
-        private NetMQPoller _receivePoller = null;
+        private NetMQPoller _socketPoller = null;
+        private NetMQPoller _clientPoller = null;
         private readonly NetMQQueue<List<byte[]>> _sendQueue;
-        private readonly NetMQQueue<List<byte[]>> _receivedQueue;
+        private readonly NetMQQueue<List<byte[]>> _receiveQueue;
 
         /// <summary>
         /// Client constructor.
@@ -46,13 +46,13 @@ namespace MessageWire
             _dealerSocket.Options.Identity = _clientIdBytes;
             _sendQueue.ReceiveReady += _sendQueue_ReceiveReady;
             _dealerSocket.ReceiveReady += _socket_ReceiveReady;
-            _sendPoller = new NetMQPoller { _dealerSocket, _sendQueue };
-            _sendPoller.RunAsync();
+            _socketPoller = new NetMQPoller { _dealerSocket, _sendQueue };
+            _socketPoller.RunAsync();
 
-            _receivedQueue = new NetMQQueue<List<byte[]>>();
-            _receivedQueue.ReceiveReady += _receivedQueue_ReceiveReady;
-            _receivePoller = new NetMQPoller { _receivedQueue };
-            _receivePoller.RunAsync();
+            _receiveQueue = new NetMQQueue<List<byte[]>>();
+            _receiveQueue.ReceiveReady += _receivedQueue_ReceiveReady;
+            _clientPoller = new NetMQPoller { _receiveQueue };
+            _clientPoller.RunAsync();
         }
 
         private void _receivedQueue_ReceiveReady(object sender, NetMQQueueEventArgs<List<byte[]>> e)
@@ -121,7 +121,7 @@ namespace MessageWire
         {
             var msg = e.Socket.ReceiveMultipartMessage();
             var message = msg.ToMessageWithoutClientFrame(_clientId);
-            _receivedQueue.Enqueue(message.Frames);
+            _receiveQueue.Enqueue(message.Frames);
         }
         
         #region IDisposable Members
@@ -142,12 +142,12 @@ namespace MessageWire
                 _disposed = true; //prevent second call to Dispose
                 if (disposing)
                 {
-                    if (null != _sendPoller) _sendPoller.Dispose();
+                    if (null != _socketPoller) _socketPoller.Dispose();
                     if (null != _sendQueue) _sendQueue.Dispose();
                     if (null != _dealerSocket) _dealerSocket.Dispose();
 
-                    if (null != _receivePoller) _receivePoller.Dispose();
-                    if (null != _receivedQueue) _receivedQueue.Dispose();
+                    if (null != _clientPoller) _clientPoller.Dispose();
+                    if (null != _receiveQueue) _receiveQueue.Dispose();
                 }
             }
         }
