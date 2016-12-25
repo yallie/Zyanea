@@ -1,4 +1,5 @@
-﻿using NetMQ;
+﻿using MessageWire.ZeroKnowledge;
+using NetMQ;
 using NetMQ.Sockets;
 using System;
 using System.Collections.Concurrent;
@@ -19,14 +20,20 @@ namespace MessageWire
         private readonly NetMQQueue<NetMQMessage> _sendQueue;
         private readonly NetMQQueue<Message> _receivedQueue;
         private readonly NetMQQueue<MessageFailure> _sendFailureQueue;
+        private readonly IZkRepository _authRepository;
+        private readonly Dictionary<Guid, ZkProtocolHostSession> _sessions;
 
         /// <summary>
-        /// Host constructor.
+        /// Host constructor. Supply an IZkRepository to enable Zero Knowledge authentication and encryption.
         /// </summary>
         /// <param name="connectionString">Valid NetMQ server socket connection string.</param>
-        public Host(string connectionString)
+        /// <param name="authRepository">External authentication repository. Null creates host with no encryption.</param>
+        public Host(string connectionString, IZkRepository authRepository = null)
         {
+            if (string.IsNullOrWhiteSpace(connectionString)) throw new ArgumentNullException("Connection string cannot be null.", nameof(connectionString));
             _connectionString = connectionString;
+            _authRepository = authRepository;
+            _sessions = new Dictionary<Guid, ZkProtocolHostSession>();
             _sendQueue = new NetMQQueue<NetMQMessage>();
 
             _routerSocket = new RouterSocket(_connectionString);
@@ -47,6 +54,7 @@ namespace MessageWire
         private EventHandler<MessageEventFailureArgs> _sentFailureEvent;
         private EventHandler<MessageEventArgs> _receivedEvent;
         private EventHandler<MessageEventArgs> _sentEvent;
+        private EventHandler<MessageEventArgs> _zkClientSessionEstablishedEvent;
 
         /// <summary>
         /// This event occurs when a message has been received. 
@@ -76,6 +84,22 @@ namespace MessageWire
             }
         }
 
+        /// <summary>
+        /// This event occurs when a new client session has been established over Zero Knowledge protocol.
+        /// The Message in the event contains no frames. It is only to signal a new encrypted ClientId.
+        /// </summary>
+        /// <remarks>This handler will run on a different thread than the socket poller and
+        /// blocking on this thread will not block sending and receiving.</remarks>
+        public event EventHandler<MessageEventArgs> ZkClientSessionEstablishedEvent {
+            add {
+                _zkClientSessionEstablishedEvent += value;
+            }
+            remove {
+                _zkClientSessionEstablishedEvent -= value;
+            }
+        }
+
+
         public void Send(Guid clientId, List<byte[]> frames)
         {
             if (_disposed) throw new ObjectDisposedException("Client", "Cannot send on disposed client.");
@@ -86,7 +110,22 @@ namespace MessageWire
             var message = new NetMQMessage();
             message.Append(clientId.ToByteArray());
             message.AppendEmptyFrame();
-            foreach (var frame in frames) message.Append(frame);
+            if (null != _authRepository)
+            {
+                var session = _sessions[clientId];
+                if (null != session && null != session.Crypto)
+                {
+                    foreach (var frame in frames) message.Append(session.Crypto.Encrypt(frame));
+                }
+                else
+                {
+                    throw new OperationCanceledException("Encrypted session not established.");
+                }
+            }
+            else
+            {
+                foreach (var frame in frames) message.Append(frame);
+            }
             _sendQueue.Enqueue(message); //send by message to socket poller
         }
 
@@ -140,12 +179,73 @@ namespace MessageWire
             Message message;
             if (e.Queue.TryDequeue(out message, new TimeSpan(1000)))
             {
-                _receivedEvent?.Invoke(this, new MessageEventArgs
+                if (null == _authRepository)
                 {
-                    Message = message
-                });
+                    _receivedEvent?.Invoke(this, new MessageEventArgs
+                    {
+                        Message = message
+                    });
+                }
+                else
+                {
+                    var session = _sessions[message.ClientId];
+                    if (IsHandshakeRequest(message.Frames))
+                    {
+                        if (null == session)
+                        {
+                            session = new ZkProtocolHostSession(_authRepository, message.ClientId);
+                            _sessions.Add(message.ClientId, session);
+                        }
+                        var responseFrames = session.RouteHandshakeRequest(message.Frames);
+                        var msg = new NetMQMessage();
+                        msg.Append(message.ClientId.ToByteArray());
+                        msg.AppendEmptyFrame();
+                        foreach (var frame in responseFrames) msg.Append(frame);
+                        _sendQueue.Enqueue(msg); //send by message to socket poller
+
+                        //if second reply and success, raise event, new client session?
+                        if (responseFrames[0].IsEqualTo(ZkMessageHeader.HandshakeReply2Success))
+                        {
+                            _zkClientSessionEstablishedEvent?.Invoke(this, new MessageEventArgs
+                            {
+                                Message = new Message
+                                {
+                                    ClientId = message.ClientId
+                                }
+                            });
+                        }
+                    }
+                    else
+                    {
+                        if (null != session && null != session.Crypto)
+                        {
+                            for (int i = 0; i < message.Frames.Count; i++)
+                            {
+                                message.Frames[i] = session.Crypto.Decrypt(message.Frames[i]);
+                            }
+                        }
+                        _receivedEvent?.Invoke(this, new MessageEventArgs
+                        {
+                            Message = message
+                        });
+                    }
+                }
             }
         }
+
+        private bool IsHandshakeRequest(List<byte[]> frames)
+        {
+            return (null != frames
+                && frames.Count > 0
+                && frames[0].Length == 4
+                && frames[0][0] == ZkMessageHeader.SOH
+                && frames[0][1] == ZkMessageHeader.ENQ
+                && ((frames[0][2] == ZkMessageHeader.CM1 && frames.Count == 3)
+                    || (frames[0][2] == ZkMessageHeader.CM2 && frames.Count == 2))
+                && frames[0][3] == ZkMessageHeader.BEL);
+        }
+
+
 
         #region IDisposable Members
 

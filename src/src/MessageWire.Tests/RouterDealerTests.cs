@@ -30,7 +30,7 @@ namespace MessageWire.Tests
                     Assert.True(replyData.Count == 3, "Server message did not have 3 frames.");
                 };
 
-                using (var client = new Client("me", "mykey", connString))
+                using (var client = new Client(connString))
                 {
                     client.MessageReceived += (s, e) =>
                     {
