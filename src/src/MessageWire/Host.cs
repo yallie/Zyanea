@@ -112,7 +112,7 @@ namespace MessageWire
             message.AppendEmptyFrame();
             if (null != _authRepository)
             {
-                var session = _sessions[clientId];
+                var session = _sessions.ContainsKey(clientId) ? _sessions[clientId] : null;
                 if (null != session && null != session.Crypto)
                 {
                     foreach (var frame in frames) message.Append(session.Crypto.Encrypt(frame));
@@ -188,7 +188,7 @@ namespace MessageWire
                 }
                 else
                 {
-                    var session = _sessions[message.ClientId];
+                    var session = _sessions.ContainsKey(message.ClientId) ? _sessions[message.ClientId] : null;
                     if (IsHandshakeRequest(message.Frames))
                     {
                         if (null == session)

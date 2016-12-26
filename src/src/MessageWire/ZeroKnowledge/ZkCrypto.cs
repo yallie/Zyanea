@@ -14,17 +14,17 @@ namespace MessageWire.ZeroKnowledge
         public ZkCrypto(byte[] key, byte[] iv)
         {
             if (key.Length != 32) throw new ArgumentException("key must be 256 bits", "key");
-            if (iv.Length != 32) throw new ArgumentException("iv must be 256 bits", "iv");
+            if (iv.Length != 16) throw new ArgumentException("iv must be 128 bits", "iv");
             _key = key;
             _iv = iv;
         }
 
         public byte[] Encrypt(byte[] data)
         {
-            using (var crypto = Aes.Create())
+            using (var crypto = System.Security.Cryptography. Aes.Create())
             {
                 crypto.Mode = CipherMode.CBC;
-                crypto.BlockSize = 256;
+                crypto.BlockSize = 128; // 256;
                 crypto.KeySize = 256;
                 crypto.Padding = PaddingMode.PKCS7;
                 using (var encryptor = crypto.CreateEncryptor(_key, _iv))
@@ -39,7 +39,7 @@ namespace MessageWire.ZeroKnowledge
             using (var crypto = Aes.Create())
             {
                 crypto.Mode = CipherMode.CBC;
-                crypto.BlockSize = 256;
+                crypto.BlockSize = 128; // 256;
                 crypto.KeySize = 256;
                 crypto.Padding = PaddingMode.PKCS7;
                 using (var dencryptor = crypto.CreateDecryptor(_key, _iv))

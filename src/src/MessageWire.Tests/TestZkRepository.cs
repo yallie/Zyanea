@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MessageWire.Tests
 {
-    public class TeskZkRepository : IZkRepository
+    public class TestZkRepository : IZkRepository
     {
         private string password = "....++++....";
         private ZkProtocol _protocol = new ZkProtocol();

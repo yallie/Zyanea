@@ -10,12 +10,14 @@ namespace MessageWire.ZeroKnowledge
     public class ZkProtocol
     {
         private readonly SHA256 _sha;
+        private readonly MD5 _md5;
         private readonly Random _random;
         private readonly BigInteger _n;
 
         public ZkProtocol()
         {
             _sha = SHA256.Create();
+            _md5 = MD5.Create();
             _random = new Random(DateTime.Now.Millisecond);
             _n = new BigInteger(ZkSafePrimes.N4);
         }
@@ -72,7 +74,7 @@ namespace MessageWire.ZeroKnowledge
         /// <returns></returns>
         public byte[] CalculateRandomScramble(byte[] ephemeralA, byte[] ephemeralB)
         {
-            return ComputeHash(ephemeralA, ephemeralB);
+            return ComputeShortHash(ephemeralA, ephemeralB);
         }
 
         /// <summary>
@@ -151,6 +153,12 @@ namespace MessageWire.ZeroKnowledge
             var count = bits / 8;
             var skip = _random.Next(0, bytes.Length - count);
             return bytes.Skip(skip).Take(count).ToArray();
+        }
+
+        public byte[] ComputeShortHash(params byte[][] items)
+        {
+            var buf = Combine(items);
+            return _md5.ComputeHash(buf);
         }
 
         public byte[] ComputeHash(params byte[][] items)

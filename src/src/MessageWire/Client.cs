@@ -98,6 +98,7 @@ namespace MessageWire
         public Guid ClientId { get { return _clientId; } }
 
         private EventHandler<MessageEventArgs> _receivedEvent;
+        private EventHandler<MessageEventArgs> _invalidReceivedEvent;
         private EventHandler<EventArgs> _ecryptionProtocolEstablishedEvent;
         private EventHandler<EventArgs> _ecryptionProtocolFailedEvent;
 
@@ -112,6 +113,20 @@ namespace MessageWire
             }
             remove {
                 _receivedEvent -= value;
+            }
+        }
+
+        /// <summary>
+        /// This event occurs when an invalid protocol message has been received. 
+        /// </summary>
+        /// <remarks>This handler is thread safe occuring on a thread other 
+        /// than the thread sending and receiving messages over the wire.</remarks>
+        public event EventHandler<MessageEventArgs> InvalidMessageReceived {
+            add {
+                _invalidReceivedEvent += value;
+            }
+            remove {
+                _invalidReceivedEvent -= value;
             }
         }
 
@@ -201,11 +216,14 @@ namespace MessageWire
             List<byte[]> frames;
             if (e.Queue.TryDequeue(out frames, new TimeSpan(1000)))
             {
+                var invokeReceivedEvent = true;
+                
                 //check for ZK protocol
-                if (null != _session)
+                if (_throwOnSend && null != _session)
                 {
                     if (null == _session.Crypto)
                     {
+                        invokeReceivedEvent = false;
                         if (IsHandshakeReply(frames))
                         {
                             if (frames[0][2] == ZkMessageHeader.SM1)
@@ -218,32 +236,39 @@ namespace MessageWire
                                 }
                                 else
                                 {
-                                    _throwOnSend = true;
-                                }
-                            }
-                            else if (frames[0][2] == ZkMessageHeader.SM2)
-                            {
-                                //complete proof
-                                if (_session.ProcessHandshakeReply2(frames))
-                                {
-                                    _throwOnSend = false;
-                                    if (null != _securedSignal) _securedSignal.Set(); //signal if waiting
-                                    _ecryptionProtocolEstablishedEvent?.Invoke(this, new EventArgs());
-                                }
-                                else
-                                {
-                                    _throwOnSend = true;
                                     _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
                                 }
                             }
+                            else if (frames[0][2] == ZkMessageHeader.SM2 
+                                && _session.ProcessHandshakeReply2(frames)) //complete proof
+                            {
+                                _throwOnSend = false;
+                                if (null != _securedSignal) _securedSignal.Set(); //signal if waiting
+                                _ecryptionProtocolEstablishedEvent?.Invoke(this, new EventArgs());
+                            }
                             else
                             {
-                                _throwOnSend = true;
                                 _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
                             }
                         }
+                        else
+                        {
+                            //raise invalid protocol exception
+                            _invalidReceivedEvent?.Invoke(this, new MessageEventArgs
+                            {
+                                Message = new Message
+                                {
+                                    ClientId = _clientId,
+                                    Frames = frames
+                                }
+                            });
+                        }
                     }
-                    else
+                }
+
+                if (invokeReceivedEvent)
+                {
+                    if (null != _session && null != _session.Crypto)
                     {
                         //decrypt message frames
                         for (int i = 0; i < frames.Count; i++)
@@ -251,23 +276,22 @@ namespace MessageWire
                             frames[i] = _session.Crypto.Decrypt(frames[i]);
                         }
                     }
-                }
-
-                _receivedEvent?.Invoke(this, new MessageEventArgs
-                {
-                    Message = new Message
+                    _receivedEvent?.Invoke(this, new MessageEventArgs
                     {
-                        ClientId = _clientId,
-                        Frames = frames
-                    }
-                });
+                        Message = new Message
+                        {
+                            ClientId = _clientId,
+                            Frames = frames
+                        }
+                    });
+                }
             }
         }
 
         private bool IsHandshakeReply(List<byte[]> frames)
         {
             return (null != frames
-                && frames.Count == 3
+                && (frames.Count == 2 || frames.Count == 3)
                 && frames[0].Length == 4
                 && frames[0][0] == ZkMessageHeader.SOH
                 && frames[0][1] == ZkMessageHeader.ACK

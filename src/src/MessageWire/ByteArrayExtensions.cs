@@ -1,17 +1,17 @@
 using System.Text;
 
-namespace MessageWire.ZeroKnowledge
+namespace MessageWire
 {
-    public static class ZkExt
+    public static class ByteArrayExtensions
     {
         public static byte[] ConvertToBytes(this string val)
         {
-            return Encoding.Unicode.GetBytes(val);
+            return Encoding.UTF8.GetBytes(val);
         }
 
-        public static string ConverToString(this byte[] bytes)
+        public static string ConvertToString(this byte[] bytes)
         {
-            return Encoding.Unicode.GetString(bytes);
+            return Encoding.UTF8.GetString(bytes);
         }
 
         public static bool IsEqualTo(this byte[] a1, byte[] a2)
