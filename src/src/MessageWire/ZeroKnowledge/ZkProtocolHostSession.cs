@@ -15,7 +15,7 @@ namespace MessageWire.ZeroKnowledge
         private readonly DateTime _created;
 
         private string _id = null;
-        private ZkPasswordHash _zkPwdHash = null;
+        private ZkIdentityKeyHash _zkPwdHash = null;
         private byte[] _scramble = null;
         private byte[] _serverSessionKey = null;
         private byte[] _clientEphemeralA = null;
@@ -65,7 +65,7 @@ namespace MessageWire.ZeroKnowledge
             {
                 _id = Encoding.UTF8.GetString(frames[1]);
                 _clientEphemeralA = frames[2];
-                _zkPwdHash = _repository.GetPasswordHashSet(_id);
+                _zkPwdHash = _repository.GetIdentityKeyHashSet(_id);
                 if (null == _zkPwdHash)
                 {
                     list.Add(ZkMessageHeader.HandshakeReply1Failure);

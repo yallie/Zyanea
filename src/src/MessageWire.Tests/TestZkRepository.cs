@@ -8,13 +8,13 @@ namespace MessageWire.Tests
 {
     public class TestZkRepository : IZkRepository
     {
-        private string password = "....++++....";
+        private string identityKey = "....++++....";
         private ZkProtocol _protocol = new ZkProtocol();
-        private ZkPasswordHash _hash = null;
+        private ZkIdentityKeyHash _hash = null;
 
-        public ZkPasswordHash GetPasswordHashSet(string username)
+        public ZkIdentityKeyHash GetIdentityKeyHashSet(string identity)
         {
-            if (_hash == null) _hash = _protocol.HashCredentials(username, password);
+            if (_hash == null) _hash = _protocol.HashCredentials(identity, identityKey);
             return _hash;
         }
     }

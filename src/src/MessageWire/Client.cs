@@ -14,8 +14,8 @@ namespace MessageWire
 {
     public class Client : IDisposable
     {
-        private readonly string _id;
-        private readonly string _key;
+        private readonly string _identity;
+        private readonly string _identityKey;
         private readonly string _connectionString;
 
         private readonly Guid _clientId;
@@ -34,15 +34,15 @@ namespace MessageWire
         /// Client constructor.
         /// </summary>
         /// <param name="connectionString">Valid NetMQ client socket connection string.</param>
-        /// <param name="id">Client identifier passed to the server in Zero Knowledge authentication. 
-        ///                  Null for unencrypted hosts.</param>
-        /// <param name="key">Secret key used by NOT passed to the server in Zero Knowledge authentication 
+        /// <param name="identity">Client identifier passed to the server in Zero Knowledge authentication. 
+        ///                  Null for unsecured hosts.</param>
+        /// <param name="identityKey">Secret key used by NOT passed to the server in Zero Knowledge authentication 
         ///                   but used in memory to validate authentication of the server. Null for 
-        ///                   unencrypted hosts</param>
-        public Client(string connectionString, string id = null, string key = null)
+        ///                   unsecured hosts</param>
+        public Client(string connectionString, string identity = null, string identityKey = null)
         {
-            _id = id;
-            _key = key;
+            _identity = identity;
+            _identityKey = identityKey;
             _connectionString = connectionString;
 
             _clientId = Guid.NewGuid();
@@ -61,7 +61,7 @@ namespace MessageWire
             _clientPoller = new NetMQPoller { _receiveQueue };
             _clientPoller.RunAsync();
 
-            if (null != _id && null != _key)
+            if (null != _identity && null != _identityKey)
             {
                 _throwOnSend = true;
             }
@@ -78,12 +78,12 @@ namespace MessageWire
         /// <returns>Returns true if connection has been secured. False if non-blocking or if protocol fails.</returns>
         public bool SecureConnection(bool blockUntilComplete = true, int timeoutMs = 500)
         {
-            if (null == _id || null == _key) return false;
+            if (null == _identity || null == _identityKey) return false;
             if (null != _session && null != _session.Crypto) return true; //in case it's called twice
 
             _securedSignal = new ManualResetEvent(false);
-            _session = new ZkProtocolClientSession(_id, _key);
-            _sendQueue.Enqueue(_session.CreateHandshakeMessage1(_id));
+            _session = new ZkProtocolClientSession(_identity, _identityKey);
+            _sendQueue.Enqueue(_session.CreateHandshakeMessage1(_identity));
 
             if (blockUntilComplete)
             {

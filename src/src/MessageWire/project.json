@@ -2,18 +2,18 @@
   "name": "MessageWire",
   "title": "MessageWire",
   "authors": [ "Tyler Jensen" ],
-  "description": "MessageWire is a Zero Knowledge authentication and encryption wrapper NetMQ's dealer router messaging combination.",
+  "description": "MessageWire is a Zero Knowledge authentication and encryption wrapper for a NetMQ Dealer socket (client) Router socket (server) combination.",
   "projectUrl": "https://github.com/tylerjensen/MessageWire",
   "packOptions": {
-    "iconUrl": "http://www.tsjensen.com/blog/image.axd?picture=2014/11/swlogo_sm.png",
+    "iconUrl": "http://tsjensen.com/blog/image.axd?picture=MessageWireLogo.png",
     "licenseUrl": "https://opensource.org/licenses/MIT",
     "copyright": "Tyler Jensen 2016",
     "owners": [ "Tyler Jensen" ],
-    "summary": "MessageWire is a Zero Knowledge authentication and encryption wrapper NetMQ's dealer router messaging combination.",
+    "summary": "MessageWire is a Zero Knowledge authentication and encryption wrapper for a NetMQ Dealer socket (client) Router socket (server) combination.",
     "releaseNotes": "Written for netstandard1.3 so .NET Framework 4.6 and Core 1.0 and up are supported.",
-    "tags": [ "TCP", "Messaging", "Zero Knowledge", "Secure Remote Password Protocol" ]
+    "tags": [ "TCP", "Messaging", "Zero-Knowledge-Proof", "Secure-Remote-Password-Protocol" ]
   },
-  "version": "1.0.0-*",
+  "version": "1.0.1-*",
 
   "dependencies": {
     "NetMQ": "4.0.0-rc5",

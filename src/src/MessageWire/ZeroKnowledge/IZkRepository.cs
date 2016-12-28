@@ -7,12 +7,12 @@ namespace MessageWire.ZeroKnowledge
 {
     public interface IZkRepository
     {
-        ZkPasswordHash GetPasswordHashSet(string username);
+        ZkIdentityKeyHash GetIdentityKeyHashSet(string identity);
     }
 
     public class ZkNullRepository : IZkRepository
     {
-        public ZkPasswordHash GetPasswordHashSet(string username)
+        public ZkIdentityKeyHash GetIdentityKeyHashSet(string identity)
         {
             return null;
         }

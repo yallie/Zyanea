@@ -1,6 +1,6 @@
 namespace MessageWire.ZeroKnowledge
 {
-    public class ZkPasswordHash
+    public class ZkIdentityKeyHash
     {
         public byte[] Salt { get; set; }
         public byte[] Key { get; set; }
