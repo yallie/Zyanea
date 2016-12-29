@@ -13,7 +13,7 @@
     "releaseNotes": "Written for netstandard1.3 so .NET Framework 4.6 and Core 1.0 and up are supported.",
     "tags": [ "TCP", "Messaging", "Zero-Knowledge-Proof", "Secure-Remote-Password-Protocol" ]
   },
-  "version": "1.0.1-*",
+  "version": "1.0.2-*",
 
   "dependencies": {
     "NetMQ": "4.0.0-rc5",
