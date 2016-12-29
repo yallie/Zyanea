@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security;
 using System.Text;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 namespace MessageWire.ZeroKnowledge
 {
@@ -18,6 +19,9 @@ namespace MessageWire.ZeroKnowledge
         private byte[] _clientSessionKey = null;
         private byte[] _scramble = null;
         private ZkCrypto _zkCrypto = null;
+        private RSAParameters _clientPublicPrivateKey = default(RSAParameters);
+        private RSAParameters _clientPublicKey = default(RSAParameters);
+        private RSAParameters _serverPublicKey = default(RSAParameters);
 
         public ZkProtocolClientSession(string id, string key)
         {
@@ -28,59 +32,107 @@ namespace MessageWire.ZeroKnowledge
 
         public ZkCrypto Crypto { get { return _zkCrypto; } }
 
-        /// <summary>
-        /// Create first set of message frames for initiating the ZkProtocol.
-        /// </summary>
-        /// <param name="id"></param>
-        /// <returns></returns>
-        public List<byte[]> CreateHandshakeMessage1(string id)
+        public List<byte[]> CreateInitiationRequest()
         {
             var list = new List<byte[]>();
-            list.Add(ZkMessageHeader.HandshakeRequest1);
-            list.Add(Encoding.UTF8.GetBytes(id));
-
-            _clientEphemeralA = _protocol.GetClientEphemeralA(_protocol.CryptRand());
-            list.Add(_clientEphemeralA);
+            list.Add(ZkMessageHeader.InitiationRequest);
+            using (var rsa = RSA.Create())
+            {
+                _clientPublicPrivateKey = rsa.ExportParameters(true);
+                _clientPublicKey = rsa.ExportParameters(false);
+            }
+            list.Add(_clientPublicKey.ToBytes());
             return list;
         }
 
-        public List<byte[]> CreateHandshakeMessage2(List<byte[]> frames)
+        public List<byte[]> CreateHandshakeRequest(string identity, List<byte[]> initiationResponseFrames)
         {
-            if (frames.Count != 3
-                || frames[0].IsEqualTo(ZkMessageHeader.HandshakeReply1Failure)
-                || !frames[0].IsEqualTo(ZkMessageHeader.HandshakeReply1Success))
+            if (initiationResponseFrames.Count != 2
+                || initiationResponseFrames[0].IsEqualTo(ZkMessageHeader.InititaionResponseFailure)
+                || !initiationResponseFrames[0].IsEqualTo(ZkMessageHeader.InititaionResponseSuccess))
             {
                 return null;
             }
 
-            var salt = frames[1];
-            var bServerEphemeral = frames[2];
+            _serverPublicKey = initiationResponseFrames[1].ToRSAParameters();
+
+            _clientEphemeralA = _protocol.GetClientEphemeralA(_protocol.CryptRand());
 
             var list = new List<byte[]>();
-            list.Add(ZkMessageHeader.HandshakeRequest2);
-
-            _scramble = _protocol.CalculateRandomScramble(_clientEphemeralA, bServerEphemeral);
-            _clientSessionKey = _protocol.ClientComputeSessionKey(salt, _id, _key,
-                _clientEphemeralA, bServerEphemeral, _scramble);
-
-            _clientSessionHash = _protocol.ClientCreateSessionHash(_id, salt, _clientEphemeralA,
-                bServerEphemeral, _clientSessionKey);
-            list.Add(_clientSessionHash);
+            list.Add(ZkMessageHeader.HandshakeRequest);
+            using (var rsa = RSA.Create())
+            {
+                rsa.ImportParameters(_serverPublicKey);
+                list.Add(rsa.Encrypt(Encoding.UTF8.GetBytes(identity), RSAEncryptionPadding.Pkcs1));
+                list.Add(rsa.Encrypt(_clientEphemeralA, RSAEncryptionPadding.Pkcs1));
+            }
             return list;
         }
 
-        public bool ProcessHandshakeReply2(List<byte[]> frames)
+        public List<byte[]> CreateProofRequest(List<byte[]> handshakeResponseFrames)
         {
-            if (frames.Count != 2
-                || frames[0].IsEqualTo(ZkMessageHeader.HandshakeReply2Failure)
-                || !frames[0].IsEqualTo(ZkMessageHeader.HandshakeReply2Success))
+            if (handshakeResponseFrames.Count != 3
+                || handshakeResponseFrames[0].IsEqualTo(ZkMessageHeader.HandshakeResponseFailure)
+                || !handshakeResponseFrames[0].IsEqualTo(ZkMessageHeader.HandshakeResponseSuccess))
+            {
+                return null;
+            }
+
+            byte[] salt = null;
+            byte[] bServerEphemeral = null;
+            using (var rsa = RSA.Create())
+            {
+                rsa.ImportParameters(_clientPublicPrivateKey);
+                salt = rsa.Decrypt(handshakeResponseFrames[1], RSAEncryptionPadding.Pkcs1);
+                bServerEphemeral = rsa.Decrypt(handshakeResponseFrames[2], RSAEncryptionPadding.Pkcs1);
+            }
+
+            _scramble = _protocol.CalculateRandomScramble(_clientEphemeralA, bServerEphemeral);
+            _clientSessionKey = _protocol.ClientComputeSessionKey(
+                salt,
+                _id,
+                _key,
+                _clientEphemeralA,
+                bServerEphemeral,
+                _scramble);
+
+            _clientSessionHash = _protocol.ClientCreateSessionHash(
+                _id,
+                salt,
+                _clientEphemeralA,
+                bServerEphemeral,
+                _clientSessionKey);
+
+            var list = new List<byte[]>();
+            list.Add(ZkMessageHeader.ProofRequest);
+            using (var rsa = RSA.Create())
+            {
+                rsa.ImportParameters(_serverPublicKey);
+                list.Add(rsa.Encrypt(_clientSessionHash, RSAEncryptionPadding.Pkcs1));
+            }
+            return list;
+        }
+
+        public bool ProcessProofReply(List<byte[]> proofResponseFrames)
+        {
+            if (proofResponseFrames.Count != 2
+                || proofResponseFrames[0].IsEqualTo(ZkMessageHeader.ProofResponseFailure)
+                || !proofResponseFrames[0].IsEqualTo(ZkMessageHeader.ProofResponseSuccess))
             {
                 return false;
             }
 
-            var serverSessionHash = frames[1];
-            var clientServerSessionHash = _protocol.ServerCreateSessionHash(_clientEphemeralA,
-                _clientSessionHash, _clientSessionKey);
+            byte[] serverSessionHash = null;
+            using (var rsa = RSA.Create())
+            {
+                rsa.ImportParameters(_clientPublicPrivateKey);
+                serverSessionHash = rsa.Decrypt(proofResponseFrames[1], RSAEncryptionPadding.Pkcs1);
+            }
+            byte[] clientServerSessionHash = _protocol.ServerCreateSessionHash(
+                _clientEphemeralA,
+                _clientSessionHash, 
+                _clientSessionKey);
+
             if (!serverSessionHash.IsEqualTo(clientServerSessionHash))
             {
                 return false;

@@ -83,7 +83,7 @@ namespace MessageWire
 
             _securedSignal = new ManualResetEvent(false);
             _session = new ZkProtocolClientSession(_identity, _identityKey);
-            _sendQueue.Enqueue(_session.CreateHandshakeMessage1(_identity));
+            _sendQueue.Enqueue(_session.CreateInitiationRequest());
 
             if (blockUntilComplete)
             {
@@ -226,10 +226,17 @@ namespace MessageWire
                         invokeReceivedEvent = false;
                         if (IsHandshakeReply(frames))
                         {
-                            if (frames[0][2] == ZkMessageHeader.SM1)
+                            if (frames[0][2] == ZkMessageHeader.SM0)
+                            {
+                                //process RSA key
+
+                                //send handshake request
+                                _sendQueue.Enqueue(_session.CreateHandshakeRequest(_identity, frames));
+                            }
+                            else if (frames[0][2] == ZkMessageHeader.SM1)
                             {
                                 //send proof
-                                var frames2 = _session.CreateHandshakeMessage2(frames);
+                                var frames2 = _session.CreateProofRequest(frames);
                                 if (null != frames2)
                                 {
                                     _sendQueue.Enqueue(frames2);
@@ -240,7 +247,7 @@ namespace MessageWire
                                 }
                             }
                             else if (frames[0][2] == ZkMessageHeader.SM2 
-                                && _session.ProcessHandshakeReply2(frames)) //complete proof
+                                && _session.ProcessProofReply(frames)) //complete proof
                             {
                                 _throwOnSend = false;
                                 if (null != _securedSignal) _securedSignal.Set(); //signal if waiting
@@ -296,6 +303,8 @@ namespace MessageWire
                 && frames[0][0] == ZkMessageHeader.SOH
                 && frames[0][1] == ZkMessageHeader.ACK
                 && (frames[0][2] == ZkMessageHeader.FF0
+                   || frames[0][2] == ZkMessageHeader.SM0
+                   || frames[0][2] == ZkMessageHeader.SF0
                    || frames[0][2] == ZkMessageHeader.SM1
                    || frames[0][2] == ZkMessageHeader.SF1
                    || frames[0][2] == ZkMessageHeader.SM2

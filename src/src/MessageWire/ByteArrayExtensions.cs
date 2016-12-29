@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace MessageWire
@@ -22,6 +25,47 @@ namespace MessageWire
                 if (a1[i] != a2[i]) return false;
             }
             return true;
+        }
+
+        public static byte[] ToBytes(this RSAParameters p)
+        {
+            var parts = new string[]
+            {
+                null == p.D ? string.Empty : Convert.ToBase64String(p.D),
+                null == p.DP ? string.Empty : Convert.ToBase64String(p.DP),
+                null == p.DQ ? string.Empty : Convert.ToBase64String(p.DQ),
+                null == p.Exponent ? string.Empty : Convert.ToBase64String(p.Exponent),
+                null == p.InverseQ ? string.Empty : Convert.ToBase64String(p.InverseQ),
+                null == p.Modulus ? string.Empty : Convert.ToBase64String(p.Modulus),
+                null == p.P ? string.Empty : Convert.ToBase64String(p.P),
+                null == p.Q ? string.Empty : Convert.ToBase64String(p.Q)
+            };
+            var data = Encoding.UTF8.GetBytes(string.Join(",", parts));
+            return data;
+        }
+
+        public static RSAParameters ToRSAParameters(this byte[] data)
+        {
+            try
+            {
+                var paramString = Encoding.UTF8.GetString(data);
+                var parts = paramString.Split(',');
+                if (parts.Length != 8) return default(RSAParameters);
+                var result = new RSAParameters();
+                result.D = null != parts[0] ? Convert.FromBase64String(parts[0]) : null;
+                result.DP = null != parts[1] ? Convert.FromBase64String(parts[1]) : null;
+                result.DQ = null != parts[2] ? Convert.FromBase64String(parts[2]) : null;
+                result.Exponent = null != parts[3] ? Convert.FromBase64String(parts[3]) : null;
+                result.InverseQ = null != parts[4] ? Convert.FromBase64String(parts[4]) : null;
+                result.Modulus = null != parts[5] ? Convert.FromBase64String(parts[5]) : null;
+                result.P = null != parts[6] ? Convert.FromBase64String(parts[6]) : null;
+                result.Q = null != parts[7] ? Convert.FromBase64String(parts[7]) : null;
+                return result;
+            }
+            catch
+            {
+                return default(RSAParameters);
+            }
         }
     }
 }

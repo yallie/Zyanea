@@ -196,7 +196,7 @@ namespace MessageWire
                             session = new ZkProtocolHostSession(_authRepository, message.ClientId);
                             _sessions.Add(message.ClientId, session);
                         }
-                        var responseFrames = session.RouteHandshakeRequest(message.Frames);
+                        var responseFrames = session.ProcessProtocolRequest(message.Frames);
                         var msg = new NetMQMessage();
                         msg.Append(message.ClientId.ToByteArray());
                         msg.AppendEmptyFrame();
@@ -204,7 +204,7 @@ namespace MessageWire
                         _sendQueue.Enqueue(msg); //send by message to socket poller
 
                         //if second reply and success, raise event, new client session?
-                        if (responseFrames[0].IsEqualTo(ZkMessageHeader.HandshakeReply2Success))
+                        if (responseFrames[0].IsEqualTo(ZkMessageHeader.ProofResponseSuccess))
                         {
                             _zkClientSessionEstablishedEvent?.Invoke(this, new MessageEventArgs
                             {
@@ -236,11 +236,12 @@ namespace MessageWire
         private bool IsHandshakeRequest(List<byte[]> frames)
         {
             return (null != frames
-                && frames.Count > 0
+                && (frames.Count == 2 || frames.Count == 3)
                 && frames[0].Length == 4
                 && frames[0][0] == ZkMessageHeader.SOH
                 && frames[0][1] == ZkMessageHeader.ENQ
-                && ((frames[0][2] == ZkMessageHeader.CM1 && frames.Count == 3)
+                && ((frames[0][2] == ZkMessageHeader.CM0 && frames.Count == 2)
+                    || (frames[0][2] == ZkMessageHeader.CM1 && frames.Count == 3)
                     || (frames[0][2] == ZkMessageHeader.CM2 && frames.Count == 2))
                 && frames[0][3] == ZkMessageHeader.BEL);
         }
