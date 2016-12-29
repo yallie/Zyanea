@@ -229,7 +229,15 @@ namespace MessageWire
                             if (frames[0][2] == ZkMessageHeader.SM0)
                             {
                                 //send handshake request
-                                _sendQueue.Enqueue(_session.CreateHandshakeRequest(_identity, frames));
+                                var frames1 = _session.CreateHandshakeRequest(_identity, frames);
+                                if (null != frames1)
+                                {
+                                    _sendQueue.Enqueue(frames1);
+                                }
+                                else
+                                {
+                                    _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
+                                }
                             }
                             else if (frames[0][2] == ZkMessageHeader.SM1)
                             {
