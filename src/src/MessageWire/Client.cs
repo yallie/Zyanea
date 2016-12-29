@@ -228,8 +228,6 @@ namespace MessageWire
                         {
                             if (frames[0][2] == ZkMessageHeader.SM0)
                             {
-                                //process RSA key
-
                                 //send handshake request
                                 _sendQueue.Enqueue(_session.CreateHandshakeRequest(_identity, frames));
                             }
