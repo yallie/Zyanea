@@ -15,6 +15,7 @@ namespace MessageWire.ZeroKnowledge
         private readonly Guid _clientId;
         private readonly DateTime _created;
 
+        private string _clientIpAddress = null;
         private string _identity = null;
         private ZkIdentityKeyHash _identityHash = null;
         private byte[] _scramble = null;
@@ -86,7 +87,7 @@ namespace MessageWire.ZeroKnowledge
         private List<byte[]> ProcessHandshakeRequest(List<byte[]> frames)
         {
             var list = new List<byte[]>();
-            if (frames.Count != 3)
+            if (frames.Count != 4)
             {
                 list.Add(ZkMessageHeader.HandshakeResponseFailure);
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
@@ -99,6 +100,7 @@ namespace MessageWire.ZeroKnowledge
                     rsa.ImportParameters(_serverPublicPrivateKey);
                     _identity = Encoding.UTF8.GetString(rsa.Decrypt(frames[1], RSAEncryptionPadding.Pkcs1));
                     _clientEphemeralA = rsa.Decrypt(frames[2], RSAEncryptionPadding.Pkcs1);
+                    _clientIpAddress = Encoding.UTF8.GetString(rsa.Decrypt(frames[3], RSAEncryptionPadding.Pkcs1));
                 }
                 _identityHash = _repository.GetIdentityKeyHashSet(_identity);
 

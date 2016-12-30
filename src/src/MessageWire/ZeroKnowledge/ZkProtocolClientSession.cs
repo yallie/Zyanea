@@ -11,8 +11,8 @@ namespace MessageWire.ZeroKnowledge
     internal class ZkProtocolClientSession
     {
         private readonly ZkProtocol _protocol;
-        private readonly string _id;
-        private readonly string _key;
+        private readonly string _identity;
+        private readonly string _identityKey;
 
         private byte[] _clientEphemeralA = null;
         private byte[] _clientSessionHash = null;
@@ -25,8 +25,8 @@ namespace MessageWire.ZeroKnowledge
 
         public ZkProtocolClientSession(string id, string key)
         {
-            _id = id;
-            _key = key;
+            _identity = id;
+            _identityKey = key;
             _protocol = new ZkProtocol();
         }
 
@@ -55,8 +55,8 @@ namespace MessageWire.ZeroKnowledge
             }
 
             _serverPublicKey = initiationResponseFrames[1].ToRSAParameters();
-
             _clientEphemeralA = _protocol.GetClientEphemeralA(_protocol.CryptRand());
+
 
             var list = new List<byte[]>();
             list.Add(ZkMessageHeader.HandshakeRequest);
@@ -65,6 +65,7 @@ namespace MessageWire.ZeroKnowledge
                 rsa.ImportParameters(_serverPublicKey);
                 list.Add(rsa.Encrypt(Encoding.UTF8.GetBytes(identity), RSAEncryptionPadding.Pkcs1));
                 list.Add(rsa.Encrypt(_clientEphemeralA, RSAEncryptionPadding.Pkcs1));
+                list.Add(rsa.Encrypt(Encoding.UTF8.GetBytes(Wire.PublicIpAddress), RSAEncryptionPadding.Pkcs1));
             }
             return list;
         }
@@ -90,14 +91,14 @@ namespace MessageWire.ZeroKnowledge
             _scramble = _protocol.CalculateRandomScramble(_clientEphemeralA, bServerEphemeral);
             _clientSessionKey = _protocol.ClientComputeSessionKey(
                 salt,
-                _id,
-                _key,
+                _identity,
+                _identityKey,
                 _clientEphemeralA,
                 bServerEphemeral,
                 _scramble);
 
             _clientSessionHash = _protocol.ClientCreateSessionHash(
-                _id,
+                _identity,
                 salt,
                 _clientEphemeralA,
                 bServerEphemeral,

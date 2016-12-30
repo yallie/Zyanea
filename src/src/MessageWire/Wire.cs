@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace MessageWire
@@ -17,6 +18,7 @@ namespace MessageWire
         /// <param name="block">Set to true when you want to make sure sockets send all pending messages</param>
         public static void Cleanup(bool block = true)
         {
+            _publicIpAddress = null;
             NetMQConfig.Cleanup(block);
         }
 
@@ -65,6 +67,40 @@ namespace MessageWire
             }
             set {
                 NetMQConfig.MaxSockets = value;
+            }
+        }
+
+        private static string _publicIpAddress = string.Empty;
+
+        public static string PublicIpAddress 
+        {
+            get 
+            {
+                if (string.IsNullOrEmpty(_publicIpAddress))
+                {
+                    lock (_publicIpAddress)
+                    {
+                        if (string.IsNullOrEmpty(_publicIpAddress))
+                        {
+                            try
+                            {
+                                using (var client = new HttpClient())
+                                {
+                                    _publicIpAddress = client.GetAsync("http://checkip.amazonaws.com/")
+                                        .Result
+                                        .Content
+                                        .ReadAsStringAsync()
+                                        .Result;
+                                }
+                            }
+                            catch
+                            {
+                                _publicIpAddress = "127.0.0.1";
+                            }
+                        }
+                    }
+                }
+                return _publicIpAddress;
             }
         }
     }

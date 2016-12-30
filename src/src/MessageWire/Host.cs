@@ -235,12 +235,12 @@ namespace MessageWire
         private bool IsHandshakeRequest(List<byte[]> frames)
         {
             return (null != frames
-                && (frames.Count == 2 || frames.Count == 3)
+                && (frames.Count == 2 || frames.Count == 4)
                 && frames[0].Length == 4
                 && frames[0][0] == ZkMessageHeader.SOH
                 && frames[0][1] == ZkMessageHeader.ENQ
                 && ((frames[0][2] == ZkMessageHeader.CM0 && frames.Count == 2)
-                    || (frames[0][2] == ZkMessageHeader.CM1 && frames.Count == 3)
+                    || (frames[0][2] == ZkMessageHeader.CM1 && frames.Count == 4)
                     || (frames[0][2] == ZkMessageHeader.CM2 && frames.Count == 2))
                 && frames[0][3] == ZkMessageHeader.BEL);
         }
