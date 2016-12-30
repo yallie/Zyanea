@@ -9,8 +9,18 @@ using System.Threading;
 
 namespace MessageWire.Tests
 {
-    public class RouterDealerTests
+    public class RouterDealerTests : IDisposable
     {
+        public RouterDealerTests()
+        {
+            Wire.Linger = new TimeSpan(0, 0, 0, 1);
+        }
+
+        void IDisposable.Dispose()
+        {
+            Wire.Cleanup();
+        }
+
         [Fact]
         public void BasicSendReceiveTest()
         {
@@ -134,6 +144,5 @@ namespace MessageWire.Tests
                 }
             }
         }
-
     }
 }
