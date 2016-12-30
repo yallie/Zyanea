@@ -51,13 +51,13 @@ namespace MessageWire
             _sendQueue = new NetMQQueue<List<byte[]>>();
             _dealerSocket = new DealerSocket(_connectionString);
             _dealerSocket.Options.Identity = _clientIdBytes;
-            _sendQueue.ReceiveReady += _sendQueue_ReceiveReady;
-            _dealerSocket.ReceiveReady += _socket_ReceiveReady;
+            _sendQueue.ReceiveReady += SendQueue_ReceiveReady;
+            _dealerSocket.ReceiveReady += DealerSocket_ReceiveReady;
             _socketPoller = new NetMQPoller { _dealerSocket, _sendQueue };
             _socketPoller.RunAsync();
 
             _receiveQueue = new NetMQQueue<List<byte[]>>();
-            _receiveQueue.ReceiveReady += _receivedQueue_ReceiveReady;
+            _receiveQueue.ReceiveReady += ReceivedQueue_ReceiveReady;
             _clientPoller = new NetMQPoller { _receiveQueue };
             _clientPoller.RunAsync();
 
@@ -177,7 +177,7 @@ namespace MessageWire
         }
 
         //Executes on same poller thread as dealer socket, so we can send directly
-        private void _sendQueue_ReceiveReady(object sender, NetMQQueueEventArgs<List<byte[]>> e)
+        private void SendQueue_ReceiveReady(object sender, NetMQQueueEventArgs<List<byte[]>> e)
         {
             var message = new NetMQMessage();
             message.AppendEmptyFrame();
@@ -203,7 +203,7 @@ namespace MessageWire
 
         //Executes on same poller thread as dealer socket, so we enqueue to the received queue
         //and raise the event on the client poller thread for received queue
-        private void _socket_ReceiveReady(object sender, NetMQSocketEventArgs e)
+        private void DealerSocket_ReceiveReady(object sender, NetMQSocketEventArgs e)
         {
             var msg = e.Socket.ReceiveMultipartMessage();
             var message = msg.ToMessageWithoutClientFrame(_clientId);
@@ -211,7 +211,7 @@ namespace MessageWire
         }
 
         //Executes on client poller thread to avoid tying up the dealer socket poller thread
-        private void _receivedQueue_ReceiveReady(object sender, NetMQQueueEventArgs<List<byte[]>> e)
+        private void ReceivedQueue_ReceiveReady(object sender, NetMQQueueEventArgs<List<byte[]>> e)
         {
             List<byte[]> frames;
             if (e.Queue.TryDequeue(out frames, new TimeSpan(1000)))

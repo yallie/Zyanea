@@ -38,15 +38,15 @@ namespace MessageWire
 
             _routerSocket = new RouterSocket(_connectionString);
             _routerSocket.Options.RouterMandatory = true;
-            _sendQueue.ReceiveReady += _sendQueue_ReceiveReady;
-            _routerSocket.ReceiveReady += _socket_ReceiveReady;
+            _sendQueue.ReceiveReady += SendQueue_ReceiveReady;
+            _routerSocket.ReceiveReady += RouterSocket_ReceiveReady;
             _socketPoller = new NetMQPoller { _routerSocket, _sendQueue };
             _socketPoller.RunAsync();
 
             _sendFailureQueue = new NetMQQueue<MessageFailure>();
             _receivedQueue = new NetMQQueue<Message>();
-            _sendFailureQueue.ReceiveReady += _sendFailureQueue_ReceiveReady;
-            _receivedQueue.ReceiveReady += _receivedQueue_ReceiveReady;
+            _sendFailureQueue.ReceiveReady += SendFailureQueue_ReceiveReady;
+            _receivedQueue.ReceiveReady += ReceivedQueue_ReceiveReady;
             _hostPoller = new NetMQPoller { _receivedQueue, _sendFailureQueue };
             _hostPoller.RunAsync();
         }
@@ -99,7 +99,6 @@ namespace MessageWire
             }
         }
 
-
         public void Send(Guid clientId, List<byte[]> frames)
         {
             if (_disposed) throw new ObjectDisposedException("Client", "Cannot send on disposed client.");
@@ -130,7 +129,7 @@ namespace MessageWire
         }
 
         //occurs on socket polling thread to assure sending and receiving on same thread
-        private void _sendQueue_ReceiveReady(object sender, NetMQQueueEventArgs<NetMQMessage> e)
+        private void SendQueue_ReceiveReady(object sender, NetMQQueueEventArgs<NetMQMessage> e)
         {
             NetMQMessage message;
             if (e.Queue.TryDequeue(out message, new TimeSpan(1000)))
@@ -153,7 +152,7 @@ namespace MessageWire
         }
 
         //occurs on socket polling thread to assure sending and receiving on same thread
-        private void _socket_ReceiveReady(object sender, NetMQSocketEventArgs e)
+        private void RouterSocket_ReceiveReady(object sender, NetMQSocketEventArgs e)
         {
             var msg = e.Socket.ReceiveMultipartMessage();
             var message = msg.ToMessageWithClientFrame();
@@ -161,7 +160,7 @@ namespace MessageWire
         }
 
         //occurs on host polling thread to allow sending and receiving on a different thread
-        private void _sendFailureQueue_ReceiveReady(object sender, NetMQQueueEventArgs<MessageFailure> e)
+        private void SendFailureQueue_ReceiveReady(object sender, NetMQQueueEventArgs<MessageFailure> e)
         {
             MessageFailure mf;
             if (e.Queue.TryDequeue(out mf, new TimeSpan(1000)))
@@ -174,7 +173,7 @@ namespace MessageWire
         }
 
         //occurs on host polling thread to allow sending and receiving on a different thread
-        private void _receivedQueue_ReceiveReady(object sender, NetMQQueueEventArgs<Message> e)
+        private void ReceivedQueue_ReceiveReady(object sender, NetMQQueueEventArgs<Message> e)
         {
             Message message;
             if (e.Queue.TryDequeue(out message, new TimeSpan(1000)))
