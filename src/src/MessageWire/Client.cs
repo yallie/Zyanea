@@ -1,4 +1,5 @@
-﻿using MessageWire.ZeroKnowledge;
+﻿using MessageWire.Logging;
+using MessageWire.ZeroKnowledge;
 using NetMQ;
 using NetMQ.Sockets;
 using System;
@@ -17,18 +18,23 @@ namespace MessageWire
         private readonly string _identity;
         private readonly string _identityKey;
         private readonly string _connectionString;
+        private readonly ILog _logger;
+        private readonly IStats _stats;
 
         private readonly Guid _clientId;
         private readonly byte[] _clientIdBytes;
 
-        private DealerSocket _dealerSocket = null;
-        private NetMQPoller _socketPoller = null;
-        private NetMQPoller _clientPoller = null;
+        private readonly DealerSocket _dealerSocket;
+        private readonly NetMQPoller _socketPoller;
+        private readonly NetMQPoller _clientPoller;
         private readonly NetMQQueue<List<byte[]>> _sendQueue;
         private readonly NetMQQueue<List<byte[]>> _receiveQueue;
+        private readonly NetMQTimer _heartBeatTimer = null;
+        private readonly int _heartBeatMs;
 
         private ZkProtocolClientSession _session = null;
         private bool _throwOnSend = false;
+        private bool _hostDead = false;
 
         /// <summary>
         /// Client constructor.
@@ -39,11 +45,22 @@ namespace MessageWire
         /// <param name="identityKey">Secret key used by NOT passed to the server in Zero Knowledge authentication 
         ///                   but used in memory to validate authentication of the server. Null for 
         ///                   unsecured hosts</param>
-        public Client(string connectionString, string identity = null, string identityKey = null)
+        /// <param name="logger">ILogger implementation for logging operations. Null is replaced with NullLogger.</param>
+        /// <param name="stats">IStats implementation for logging perf metrics. Null is replaced with NullStats.</param>
+        /// <param name="heartBeatMs">Number of milliseconds between client sending heartbeat message to the server. 
+        /// Default 30,000 (30 seconds). Min is 1000 (1 second) and max is 600,000 (10 mins).</param>
+        public Client(string connectionString, string identity = null, string identityKey = null, 
+            ILog logger = null, IStats stats = null, int heartBeatMs = 30000)
         {
             _identity = identity;
             _identityKey = identityKey;
             _connectionString = connectionString;
+            _logger = logger ?? new NullLogger();
+            _stats = stats ?? new NullStats();
+
+            if (heartBeatMs < 1000) heartBeatMs = 1000;
+            else if (heartBeatMs > 600000) heartBeatMs = 600000;
+            _heartBeatMs = heartBeatMs;
 
             _clientId = Guid.NewGuid();
             _clientIdBytes = _clientId.ToByteArray();
@@ -58,12 +75,40 @@ namespace MessageWire
 
             _receiveQueue = new NetMQQueue<List<byte[]>>();
             _receiveQueue.ReceiveReady += ReceivedQueue_ReceiveReady;
-            _clientPoller = new NetMQPoller { _receiveQueue };
-            _clientPoller.RunAsync();
 
             if (null != _identity && null != _identityKey)
             {
                 _throwOnSend = true;
+                _heartBeatTimer = new NetMQTimer(_heartBeatMs);
+                _heartBeatTimer.Elapsed += HeartBeatTimer_Elapsed;
+                _clientPoller = new NetMQPoller { _receiveQueue, _heartBeatTimer };
+                _heartBeatTimer.Enable = true;
+            }
+            else
+            {
+                _clientPoller = new NetMQPoller { _receiveQueue };
+            }
+            _clientPoller.RunAsync();
+        }
+
+        private void HeartBeatTimer_Elapsed(object sender, NetMQTimerEventArgs e)
+        {
+            //check for last heartbeat from server, set to throw on new send if exceeds certain threshold
+            if (null !=_session && null != _session.Crypto)
+            {
+                if ((DateTime.UtcNow - _session.LastHeartBeat).TotalMilliseconds > _heartBeatMs * 10)
+                {
+                    _throwOnSend = true; //do not allow send
+                    _hostDead = true;
+                }
+                else
+                {
+                    _sendQueue.Enqueue(new List<byte[]> { ZkMessageHeader.HeartBeat });
+                }
+            }
+            else
+            {
+                _throwOnSend = true; //do not allow send
             }
         }
 
@@ -96,6 +141,7 @@ namespace MessageWire
         }
 
         public Guid ClientId { get { return _clientId; } }
+        public bool IsHostAlive { get { return !_hostDead; } }        
 
         private EventHandler<MessageEventArgs> _receivedEvent;
         private EventHandler<MessageEventArgs> _invalidReceivedEvent;
@@ -216,88 +262,98 @@ namespace MessageWire
             List<byte[]> frames;
             if (e.Queue.TryDequeue(out frames, new TimeSpan(1000)))
             {
-                var invokeReceivedEvent = true;
-                
-                //check for ZK protocol
-                if (_throwOnSend && null != _session)
+                if (frames[0].IsEqualTo(ZkMessageHeader.HeartBeat))
                 {
-                    if (null == _session.Crypto)
+                    _session?.RecordHeartBeat();
+                }
+                else if (_throwOnSend && null != _session && null == _session.Crypto)
+                {
+                    if (IsHandshakeReply(frames))
                     {
-                        invokeReceivedEvent = false;
-                        if (IsHandshakeReply(frames))
-                        {
-                            if (frames[0][2] == ZkMessageHeader.SM0)
-                            {
-                                //send handshake request
-                                var frames1 = _session.CreateHandshakeRequest(_identity, frames);
-                                if (null != frames1)
-                                {
-                                    _sendQueue.Enqueue(frames1);
-                                }
-                                else
-                                {
-                                    _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
-                                }
-                            }
-                            else if (frames[0][2] == ZkMessageHeader.SM1)
-                            {
-                                //send proof
-                                var frames2 = _session.CreateProofRequest(frames);
-                                if (null != frames2)
-                                {
-                                    _sendQueue.Enqueue(frames2);
-                                }
-                                else
-                                {
-                                    _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
-                                }
-                            }
-                            else if (frames[0][2] == ZkMessageHeader.SM2 
-                                && _session.ProcessProofReply(frames)) //complete proof
-                            {
-                                _throwOnSend = false;
-                                if (null != _securedSignal) _securedSignal.Set(); //signal if waiting
-                                _ecryptionProtocolEstablishedEvent?.Invoke(this, new EventArgs());
-                            }
-                            else
-                            {
-                                _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
-                            }
-                        }
-                        else
-                        {
-                            //raise invalid protocol exception
-                            _invalidReceivedEvent?.Invoke(this, new MessageEventArgs
-                            {
-                                Message = new Message
-                                {
-                                    ClientId = _clientId,
-                                    Frames = frames
-                                }
-                            });
-                        }
+                        ProcessProtocolExchange(frames);
+                    }
+                    else
+                    {
+                        OnMessageReceivedFailure(frames);
                     }
                 }
+                else
+                {
+                    ProcessRegularMessage(frames);
+                }
+            }
+        }
 
-                if (invokeReceivedEvent)
+        private void ProcessRegularMessage(List<byte[]> frames)
+        {
+            if (null != _session && null != _session.Crypto)
+            {
+                //decrypt message frames
+                for (int i = 0; i < frames.Count; i++)
                 {
-                    if (null != _session && null != _session.Crypto)
-                    {
-                        //decrypt message frames
-                        for (int i = 0; i < frames.Count; i++)
-                        {
-                            frames[i] = _session.Crypto.Decrypt(frames[i]);
-                        }
-                    }
-                    _receivedEvent?.Invoke(this, new MessageEventArgs
-                    {
-                        Message = new Message
-                        {
-                            ClientId = _clientId,
-                            Frames = frames
-                        }
-                    });
+                    frames[i] = _session.Crypto.Decrypt(frames[i]);
                 }
+            }
+            _receivedEvent?.Invoke(this, new MessageEventArgs
+            {
+                Message = new Message
+                {
+                    ClientId = _clientId,
+                    Frames = frames
+                }
+            });
+        }
+
+        private void OnMessageReceivedFailure(List<byte[]> frames)
+        {
+            _invalidReceivedEvent?.Invoke(this, new MessageEventArgs
+            {
+                Message = new Message
+                {
+                    ClientId = _clientId,
+                    Frames = frames
+                }
+            });
+        }
+
+        private void ProcessProtocolExchange(List<byte[]> frames)
+        {
+            if (frames[0][2] == ZkMessageHeader.SM0)
+            {
+                //send handshake request
+                var frames1 = _session.CreateHandshakeRequest(_identity, frames);
+                if (null != frames1)
+                {
+                    _sendQueue.Enqueue(frames1);
+                }
+                else
+                {
+                    _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
+                }
+            }
+            else if (frames[0][2] == ZkMessageHeader.SM1)
+            {
+                //send proof
+                var frames2 = _session.CreateProofRequest(frames);
+                if (null != frames2)
+                {
+                    _sendQueue.Enqueue(frames2);
+                }
+                else
+                {
+                    _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
+                }
+            }
+            else if (frames[0][2] == ZkMessageHeader.SM2
+                && _session.ProcessProofReply(frames)) //complete proof
+            {
+                _throwOnSend = false;
+                if (null != _securedSignal) _securedSignal.Set(); //signal if waiting
+                _ecryptionProtocolEstablishedEvent?.Invoke(this, new EventArgs());
+            }
+            else
+            {
+                _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
             }
         }
 
@@ -337,6 +393,7 @@ namespace MessageWire
                 _disposed = true; //prevent second call to Dispose
                 if (disposing)
                 {
+                    if (null != _heartBeatTimer) _heartBeatTimer.Enable = false;
                     if (null != _socketPoller) _socketPoller.Dispose();
                     if (null != _sendQueue) _sendQueue.Dispose();
                     if (null != _dealerSocket) _dealerSocket.Dispose();

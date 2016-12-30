@@ -1,4 +1,5 @@
-﻿using MessageWire.ZeroKnowledge;
+﻿using MessageWire.Logging;
+using MessageWire.ZeroKnowledge;
 using NetMQ;
 using NetMQ.Sockets;
 using System;
@@ -14,24 +15,45 @@ namespace MessageWire
     public class Host : IDisposable
     {
         private readonly string _connectionString;
-        private RouterSocket _routerSocket = null;
-        private NetMQPoller _socketPoller = null;
-        private NetMQPoller _hostPoller = null;
+        private readonly ILog _logger;
+        private readonly IStats _stats;
+
+        private readonly RouterSocket _routerSocket;
+        private readonly NetMQPoller _socketPoller;
+
+        private readonly NetMQPoller _hostPoller;
         private readonly NetMQQueue<NetMQMessage> _sendQueue;
         private readonly NetMQQueue<Message> _receivedQueue;
         private readonly NetMQQueue<MessageFailure> _sendFailureQueue;
+        private readonly NetMQTimer _sessionCleanupTimer = null;
+
         private readonly IZkRepository _authRepository;
         private readonly Dictionary<Guid, ZkProtocolHostSession> _sessions;
+        private readonly int _sessionTimeoutMins;
 
         /// <summary>
         /// Host constructor. Supply an IZkRepository to enable Zero Knowledge authentication and encryption.
         /// </summary>
         /// <param name="connectionString">Valid NetMQ server socket connection string.</param>
         /// <param name="authRepository">External authentication repository. Null creates host with no encryption.</param>
-        public Host(string connectionString, IZkRepository authRepository = null)
+        /// <param name="logger">ILogger implementation for logging operations. Null is replaced with NullLogger.</param>
+        /// <param name="stats">IStats implementation for logging perf metrics. Null is replaced with NullStats.</param>
+        /// <param name="sessionTimeoutMins">Session timout check interval. If no heartbeats or messages 
+        /// received on a given session in this period of time, the session will be removed from memory 
+        /// and futher attempts from the client will fail. Default is 20 minutes. Min is 1 and Max is 3600.</param>
+        public Host(string connectionString, IZkRepository authRepository = null, 
+            ILog logger = null, IStats stats = null, int sessionTimeoutMins = 20)
         {
             if (string.IsNullOrWhiteSpace(connectionString)) throw new ArgumentNullException("Connection string cannot be null.", nameof(connectionString));
             _connectionString = connectionString;
+            _logger = logger ?? new NullLogger();
+            _stats = stats ?? new NullStats();
+
+            //enforce min and max session check
+            if (sessionTimeoutMins < 1) sessionTimeoutMins = 1;
+            else if (sessionTimeoutMins > 3600) sessionTimeoutMins = 3600;
+            _sessionTimeoutMins = sessionTimeoutMins;
+
             _authRepository = authRepository;
             _sessions = new Dictionary<Guid, ZkProtocolHostSession>();
             _sendQueue = new NetMQQueue<NetMQMessage>();
@@ -47,7 +69,19 @@ namespace MessageWire
             _receivedQueue = new NetMQQueue<Message>();
             _sendFailureQueue.ReceiveReady += SendFailureQueue_ReceiveReady;
             _receivedQueue.ReceiveReady += ReceivedQueue_ReceiveReady;
-            _hostPoller = new NetMQPoller { _receivedQueue, _sendFailureQueue };
+
+            if (null == _authRepository)
+            {
+                //no session cleanup required if not secured
+                _hostPoller = new NetMQPoller { _receivedQueue, _sendFailureQueue };
+            }
+            else
+            {
+                _sessionCleanupTimer = new NetMQTimer(new TimeSpan(0, _sessionTimeoutMins, 0));
+                _sessionCleanupTimer.Elapsed += SessionCleanupTimer_Elapsed;
+                _hostPoller = new NetMQPoller { _receivedQueue, _sendFailureQueue, _sessionCleanupTimer };
+                _sessionCleanupTimer.Enable = true;
+            }
             _hostPoller.RunAsync();
         }
 
@@ -138,13 +172,14 @@ namespace MessageWire
                 {
                     _routerSocket.SendMultipartMessage(message);
                 }
-                catch (HostUnreachableException ex) //clientId not found or other error, raise event
+                catch (Exception ex) //clientId not found or other error, raise event
                 {
+                    var unreachable = ex as HostUnreachableException;
                     //send by message to host poller
                     _sendFailureQueue.Enqueue(new MessageFailure
                     {
                         Message = message.ToMessageWithClientFrame(),
-                        ErrorCode = ex.ErrorCode.ToString(),
+                        ErrorCode = null != unreachable ? unreachable.ErrorCode.ToString() : "Unknown",
                         ErrorMessage = ex.Message
                     });
                 }
@@ -155,6 +190,7 @@ namespace MessageWire
         private void RouterSocket_ReceiveReady(object sender, NetMQSocketEventArgs e)
         {
             var msg = e.Socket.ReceiveMultipartMessage();
+            if (null == msg || msg.FrameCount < 2) return; //ignore this message - nothing in it
             var message = msg.ToMessageWithClientFrame();
             _receivedQueue.Enqueue(message); //sends by message to host poller
         }
@@ -178,57 +214,98 @@ namespace MessageWire
             Message message;
             if (e.Queue.TryDequeue(out message, new TimeSpan(1000)))
             {
-                if (null == _authRepository)
+                if (message.Frames[0].IsEqualTo(ZkMessageHeader.HeartBeat))
                 {
-                    _receivedEvent?.Invoke(this, new MessageEventArgs
-                    {
-                        Message = message
-                    });
+                    ProcessHeartBeat(message);
+                }
+                else if (null == _authRepository)
+                {
+                    ProcessRegularMessage(message);
                 }
                 else
                 {
-                    var session = _sessions.ContainsKey(message.ClientId) ? _sessions[message.ClientId] : null;
-                    if (IsHandshakeRequest(message.Frames))
-                    {
-                        if (null == session)
-                        {
-                            session = new ZkProtocolHostSession(_authRepository, message.ClientId);
-                            _sessions.Add(message.ClientId, session);
-                        }
-                        var responseFrames = session.ProcessProtocolRequest(message.Frames);
-                        var msg = new NetMQMessage();
-                        msg.Append(message.ClientId.ToByteArray());
-                        msg.AppendEmptyFrame();
-                        foreach (var frame in responseFrames) msg.Append(frame);
-                        _sendQueue.Enqueue(msg); //send by message to socket poller
+                    ProcessProtectedMessage(message);
+                }
+            }
+        }
 
-                        //if second reply and success, raise event, new client session?
-                        if (responseFrames[0].IsEqualTo(ZkMessageHeader.ProofResponseSuccess))
-                        {
-                            _zkClientSessionEstablishedEvent?.Invoke(this, new MessageEventArgs
-                            {
-                                Message = new Message
-                                {
-                                    ClientId = message.ClientId
-                                }
-                            });
-                        }
-                    }
-                    else
+        private void ProcessHeartBeat(Message message)
+        {
+            var session = _sessions.ContainsKey(message.ClientId) ? _sessions[message.ClientId] : null;
+            if (null != session)
+            {
+                session.RecordHeartBeat();
+                var heartBeatResponse = new NetMQMessage();
+                heartBeatResponse.Append(message.ClientId.ToByteArray());
+                heartBeatResponse.AppendEmptyFrame();
+                heartBeatResponse.Append(ZkMessageHeader.HeartBeat);
+                _sendQueue.Enqueue(heartBeatResponse);
+            }
+        }
+
+        private void ProcessRegularMessage(Message message)
+        {
+            _receivedEvent?.Invoke(this, new MessageEventArgs
+            {
+                Message = message
+            });
+        }
+
+        private void ProcessProtectedMessage(Message message)
+        {
+            var session = _sessions.ContainsKey(message.ClientId) ? _sessions[message.ClientId] : null;
+            if (IsHandshakeRequest(message.Frames))
+            {
+                if (null == session)
+                {
+                    session = new ZkProtocolHostSession(_authRepository, message.ClientId);
+                    _sessions.Add(message.ClientId, session);
+                }
+                var responseFrames = session.ProcessProtocolRequest(message.Frames);
+                var msg = new NetMQMessage();
+                msg.Append(message.ClientId.ToByteArray());
+                msg.AppendEmptyFrame();
+                foreach (var frame in responseFrames) msg.Append(frame);
+                _sendQueue.Enqueue(msg); //send by message to socket poller
+
+                //if second reply and success, raise event, new client session?
+                if (responseFrames[0].IsEqualTo(ZkMessageHeader.ProofResponseSuccess))
+                {
+                    _zkClientSessionEstablishedEvent?.Invoke(this, new MessageEventArgs
                     {
-                        if (null != session && null != session.Crypto)
+                        Message = new Message
                         {
-                            for (int i = 0; i < message.Frames.Count; i++)
-                            {
-                                message.Frames[i] = session.Crypto.Decrypt(message.Frames[i]);
-                            }
+                            ClientId = message.ClientId
                         }
-                        _receivedEvent?.Invoke(this, new MessageEventArgs
-                        {
-                            Message = message
-                        });
+                    });
+                }
+            }
+            else
+            {
+                if (null != session && null != session.Crypto)
+                {
+                    for (int i = 0; i < message.Frames.Count; i++)
+                    {
+                        message.Frames[i] = session.Crypto.Decrypt(message.Frames[i]);
                     }
                 }
+                _receivedEvent?.Invoke(this, new MessageEventArgs
+                {
+                    Message = message
+                });
+            }
+        }
+
+        private void SessionCleanupTimer_Elapsed(object sender, NetMQTimerEventArgs e)
+        {
+            //remove timed out sessions
+            var now = DateTime.UtcNow;
+            var timedOutKeys = (from n in _sessions
+                            where (now - n.Value.LastTouched).TotalMinutes > _sessionTimeoutMins
+                            select n.Key).ToArray();
+            foreach (var key in timedOutKeys)
+            {
+                _sessions.Remove(key);
             }
         }
 
@@ -244,7 +321,6 @@ namespace MessageWire
                     || (frames[0][2] == ZkMessageHeader.CM2 && frames.Count == 2))
                 && frames[0][3] == ZkMessageHeader.BEL);
         }
-
 
 
         #region IDisposable Members
@@ -265,6 +341,7 @@ namespace MessageWire
                 _disposed = true; //prevent second call to Dispose
                 if (disposing)
                 {
+                    if (null != _sessionCleanupTimer) _sessionCleanupTimer.Enable = false;
                     if (null != _socketPoller) _socketPoller.Dispose();
                     if (null != _sendQueue) _sendQueue.Dispose();
                     if (null != _routerSocket) _routerSocket.Dispose();

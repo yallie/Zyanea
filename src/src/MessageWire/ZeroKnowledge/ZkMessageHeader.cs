@@ -38,5 +38,7 @@ namespace MessageWire.ZeroKnowledge
 
         internal static byte[] ProofResponseSuccess = new byte[] { SOH, ACK, SM2, BEL };
         internal static byte[] ProofResponseFailure = new byte[] { SOH, ACK, SF2, BEL };
+
+        internal static byte[] HeartBeat = new byte[] { SOH, ACK, BEL, BEL };
     }
 }

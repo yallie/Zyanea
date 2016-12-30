@@ -23,11 +23,19 @@ namespace MessageWire.ZeroKnowledge
         private RSAParameters _clientPublicKey = default(RSAParameters);
         private RSAParameters _serverPublicKey = default(RSAParameters);
 
+        private DateTime _lastHeartBeatResponse = DateTime.UtcNow;
+
         public ZkProtocolClientSession(string id, string key)
         {
             _identity = id;
             _identityKey = key;
             _protocol = new ZkProtocol();
+        }
+
+        public DateTime LastHeartBeat { get { return _lastHeartBeatResponse; } }
+        public void RecordHeartBeat()
+        {
+            _lastHeartBeatResponse = DateTime.UtcNow;
         }
 
         public ZkCrypto Crypto { get { return _zkCrypto; } }

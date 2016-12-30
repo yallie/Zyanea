@@ -42,6 +42,11 @@ namespace MessageWire.ZeroKnowledge
 
         public DateTime Created { get { return _created; } }
         public DateTime LastTouched { get { return _lastTouched; } }
+        public void RecordHeartBeat()
+        {
+            _lastTouched = DateTime.UtcNow;
+        }
+
         public ZkCrypto Crypto 
         {
             get 
