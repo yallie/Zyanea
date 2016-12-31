@@ -24,7 +24,8 @@ namespace MessageWire.ZeroKnowledge
         private byte[] _serverEphemeralB = null;
 
         private ZkCrypto _zkCrypto = null;
-        private DateTime _lastTouched = DateTime.UtcNow;
+        private DateTime _lastHeartbeatReceived = DateTime.UtcNow;
+        private DateTime _lastMessageReceived = DateTime.UtcNow;
 
         private RSAParameters _serverPublicPrivateKey = default(RSAParameters);
         private RSAParameters _serverPublicKey = default(RSAParameters);
@@ -36,22 +37,30 @@ namespace MessageWire.ZeroKnowledge
             _repository = repository;
             _clientId = clientId;
             _created = DateTime.UtcNow;
-            _lastTouched = _created;
+            _lastMessageReceived = _created;
             _protocol = new ZkProtocol();
         }
 
         public DateTime Created { get { return _created; } }
-        public DateTime LastTouched { get { return _lastTouched; } }
+        public DateTime LastMessageReceived { get { return _lastMessageReceived; } }
+        public DateTime LastHeartbeatReceived { get { return _lastHeartbeatReceived; } }
+        public int HeartBeatsReceivedCount { get; private set; }
+        public int MessagesReceivedCount { get; private set; }
         public void RecordHeartBeat()
         {
-            _lastTouched = DateTime.UtcNow;
+            HeartBeatsReceivedCount++;
+            _lastHeartbeatReceived = DateTime.UtcNow;
+        }
+        public void RecordMessageReceived()
+        {
+            MessagesReceivedCount++;
+            _lastMessageReceived = DateTime.UtcNow;
         }
 
         public ZkCrypto Crypto 
         {
             get 
             {
-                _lastTouched = DateTime.UtcNow;
                 return _zkCrypto;
             }
         }

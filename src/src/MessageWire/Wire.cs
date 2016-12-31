@@ -18,7 +18,7 @@ namespace MessageWire
         /// <param name="block">Set to true when you want to make sure sockets send all pending messages</param>
         public static void Cleanup(bool block = true)
         {
-            _publicIpAddress = null;
+            _publicIpAddress = string.Empty;
             NetMQConfig.Cleanup(block);
         }
 

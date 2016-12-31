@@ -28,7 +28,7 @@ namespace MessageWire
         private readonly NetMQTimer _sessionCleanupTimer = null;
 
         private readonly IZkRepository _authRepository;
-        private readonly Dictionary<Guid, ZkProtocolHostSession> _sessions;
+        private readonly ConcurrentDictionary<Guid, ZkProtocolHostSession> _sessions;
         private readonly int _sessionTimeoutMins;
 
         /// <summary>
@@ -50,12 +50,12 @@ namespace MessageWire
             _stats = stats ?? new NullStats();
 
             //enforce min and max session check
-            if (sessionTimeoutMins < 1) sessionTimeoutMins = 1;
-            else if (sessionTimeoutMins > 3600) sessionTimeoutMins = 3600;
-            _sessionTimeoutMins = sessionTimeoutMins;
+            _sessionTimeoutMins = (sessionTimeoutMins < 1)
+                ? 1
+                : (sessionTimeoutMins > 3600) ? 3600 : sessionTimeoutMins;
 
             _authRepository = authRepository;
-            _sessions = new Dictionary<Guid, ZkProtocolHostSession>();
+            _sessions = new ConcurrentDictionary<Guid, ZkProtocolHostSession>();
             _sendQueue = new NetMQQueue<NetMQMessage>();
 
             _routerSocket = new RouterSocket(_connectionString);
@@ -89,6 +89,27 @@ namespace MessageWire
         private EventHandler<MessageEventArgs> _receivedEvent;
         private EventHandler<MessageEventArgs> _sentEvent;
         private EventHandler<MessageEventArgs> _zkClientSessionEstablishedEvent;
+
+        public Guid[] GetCurrentSessionKeys()
+        {
+            return _sessions.Keys.ToArray();
+        }
+
+        public Session[] GetCurrentSessions()
+        {
+            var sessions = (from n in _sessions.Values select new Session(n)).ToArray();
+            return sessions;
+        }
+
+        public Session GetSession(Guid key)
+        {
+            ZkProtocolHostSession session;
+            if (_sessions.TryGetValue(key, out session))
+            {
+                return new Session(session);
+            }
+            return null;
+        }
 
         /// <summary>
         /// This event occurs when a message has been received. 
@@ -145,7 +166,8 @@ namespace MessageWire
             message.AppendEmptyFrame();
             if (null != _authRepository)
             {
-                var session = _sessions.ContainsKey(clientId) ? _sessions[clientId] : null;
+                ZkProtocolHostSession session = null;
+                if (!_sessions.TryGetValue(clientId, out session)) session = null;
                 if (null != session && null != session.Crypto)
                 {
                     foreach (var frame in frames) message.Append(session.Crypto.Encrypt(frame));
@@ -231,7 +253,8 @@ namespace MessageWire
 
         private void ProcessHeartBeat(Message message)
         {
-            var session = _sessions.ContainsKey(message.ClientId) ? _sessions[message.ClientId] : null;
+            ZkProtocolHostSession session = null;
+            if (!_sessions.TryGetValue(message.ClientId, out session)) session = null;
             if (null != session)
             {
                 session.RecordHeartBeat();
@@ -253,13 +276,14 @@ namespace MessageWire
 
         private void ProcessProtectedMessage(Message message)
         {
-            var session = _sessions.ContainsKey(message.ClientId) ? _sessions[message.ClientId] : null;
+            ZkProtocolHostSession session = null;
+            if (!_sessions.TryGetValue(message.ClientId, out session)) session = null;
             if (IsHandshakeRequest(message.Frames))
             {
                 if (null == session)
                 {
                     session = new ZkProtocolHostSession(_authRepository, message.ClientId);
-                    _sessions.Add(message.ClientId, session);
+                    _sessions.TryAdd(message.ClientId, session);
                 }
                 var responseFrames = session.ProcessProtocolRequest(message.Frames);
                 var msg = new NetMQMessage();
@@ -284,6 +308,7 @@ namespace MessageWire
             {
                 if (null != session && null != session.Crypto)
                 {
+                    session.RecordMessageReceived();
                     for (int i = 0; i < message.Frames.Count; i++)
                     {
                         message.Frames[i] = session.Crypto.Decrypt(message.Frames[i]);
@@ -301,11 +326,12 @@ namespace MessageWire
             //remove timed out sessions
             var now = DateTime.UtcNow;
             var timedOutKeys = (from n in _sessions
-                            where (now - n.Value.LastTouched).TotalMinutes > _sessionTimeoutMins
+                            where (now - n.Value.LastMessageReceived).TotalMinutes > _sessionTimeoutMins
                             select n.Key).ToArray();
             foreach (var key in timedOutKeys)
             {
-                _sessions.Remove(key);
+                ZkProtocolHostSession session;
+                _sessions.TryRemove(key, out session);
             }
         }
 

@@ -31,6 +31,7 @@ namespace MessageWire
         private readonly NetMQQueue<List<byte[]>> _receiveQueue;
         private readonly NetMQTimer _heartBeatTimer = null;
         private readonly int _heartBeatMs;
+        private readonly int _maxSkippedHeartBeatReplies;
 
         private ZkProtocolClientSession _session = null;
         private bool _throwOnSend = false;
@@ -47,10 +48,14 @@ namespace MessageWire
         ///                   unsecured hosts</param>
         /// <param name="logger">ILogger implementation for logging operations. Null is replaced with NullLogger.</param>
         /// <param name="stats">IStats implementation for logging perf metrics. Null is replaced with NullStats.</param>
-        /// <param name="heartBeatMs">Number of milliseconds between client sending heartbeat message to the server. 
+        /// <param name="heartBeatIntervalMs">Number of milliseconds between client sending heartbeat message to the server. 
         /// Default 30,000 (30 seconds). Min is 1000 (1 second) and max is 600,000 (10 mins).</param>
+        /// <param name="maxSkippedHeartBeatReplies">Maximum heartbeat intervals skipped without a heartbeat reply 
+        /// from the server before the client begins throwing on Send and returns false for the IsHostAlive property.
+        /// Default is 3. Min is 1 and max is 10.</param>
         public Client(string connectionString, string identity = null, string identityKey = null, 
-            ILog logger = null, IStats stats = null, int heartBeatMs = 30000)
+            ILog logger = null, IStats stats = null, 
+            int heartBeatIntervalMs = 30000, int maxSkippedHeartBeatReplies = 3)
         {
             _identity = identity;
             _identityKey = identityKey;
@@ -58,9 +63,13 @@ namespace MessageWire
             _logger = logger ?? new NullLogger();
             _stats = stats ?? new NullStats();
 
-            if (heartBeatMs < 1000) heartBeatMs = 1000;
-            else if (heartBeatMs > 600000) heartBeatMs = 600000;
-            _heartBeatMs = heartBeatMs;
+            _heartBeatMs = (heartBeatIntervalMs < 1000) 
+                ? 1000 
+                : (heartBeatIntervalMs > 600000) ? 600000 : heartBeatIntervalMs;
+
+            _maxSkippedHeartBeatReplies = (maxSkippedHeartBeatReplies < 1)
+                ? 1
+                : (maxSkippedHeartBeatReplies > 10) ? 10 : maxSkippedHeartBeatReplies;
 
             _clientId = Guid.NewGuid();
             _clientIdBytes = _clientId.ToByteArray();
@@ -96,13 +105,15 @@ namespace MessageWire
             //check for last heartbeat from server, set to throw on new send if exceeds certain threshold
             if (null !=_session && null != _session.Crypto)
             {
-                if ((DateTime.UtcNow - _session.LastHeartBeat).TotalMilliseconds > _heartBeatMs * 10)
+                if ((DateTime.UtcNow - _session.LastHeartBeat).TotalMilliseconds 
+                    > _heartBeatMs * _maxSkippedHeartBeatReplies)
                 {
                     _throwOnSend = true; //do not allow send
                     _hostDead = true;
                 }
                 else
                 {
+                    HeartBeatsSentCount++;
                     _sendQueue.Enqueue(new List<byte[]> { ZkMessageHeader.HeartBeat });
                 }
             }
@@ -141,7 +152,14 @@ namespace MessageWire
         }
 
         public Guid ClientId { get { return _clientId; } }
-        public bool IsHostAlive { get { return !_hostDead; } }        
+        public bool IsHostAlive { get { return !_hostDead; } }
+        public DateTime? LastHeartBeatReceivedFromHost {
+            get {
+                return _session?.LastHeartBeat;
+            }
+        }
+        public int HeartBeatsSentCount { get; private set; }
+        public int HeartBeatsReceivedCount { get; private set; }
 
         private EventHandler<MessageEventArgs> _receivedEvent;
         private EventHandler<MessageEventArgs> _invalidReceivedEvent;
@@ -232,10 +250,13 @@ namespace MessageWire
             {
                 if (null != _session && null != _session.Crypto)
                 {
-                    //encrypt message frames
-                    for (int i = 0; i < frames.Count; i++)
+                    if (frames.Count > 1 || !frames[0].IsEqualTo(ZkMessageHeader.HeartBeat))
                     {
-                        frames[i] = _session.Crypto.Encrypt(frames[i]);
+                        //encrypt message frames of regular messages but not heartbeat messages
+                        for (int i = 0; i < frames.Count; i++)
+                        {
+                            frames[i] = _session.Crypto.Encrypt(frames[i]);
+                        }
                     }
                 }
 
@@ -264,6 +285,7 @@ namespace MessageWire
             {
                 if (frames[0].IsEqualTo(ZkMessageHeader.HeartBeat))
                 {
+                    HeartBeatsReceivedCount++;
                     _session?.RecordHeartBeat();
                 }
                 else if (_throwOnSend && null != _session && null == _session.Crypto)
