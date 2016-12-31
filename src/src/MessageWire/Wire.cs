@@ -70,6 +70,7 @@ namespace MessageWire
             }
         }
 
+        private static object _syncRoot = new object();
         private static string _publicIpAddress = string.Empty;
 
         public static string PublicIpAddress 
@@ -78,7 +79,7 @@ namespace MessageWire
             {
                 if (string.IsNullOrEmpty(_publicIpAddress))
                 {
-                    lock (_publicIpAddress)
+                    lock (_syncRoot)
                     {
                         if (string.IsNullOrEmpty(_publicIpAddress))
                         {

@@ -92,10 +92,12 @@ namespace MessageWire
                 _heartBeatTimer.Elapsed += HeartBeatTimer_Elapsed;
                 _clientPoller = new NetMQPoller { _receiveQueue, _heartBeatTimer };
                 _heartBeatTimer.Enable = true;
+                _logger.Debug("Client created with protocol enabled.");
             }
             else
             {
                 _clientPoller = new NetMQPoller { _receiveQueue };
+                _logger.Debug("Client created. Protocol NOT enabled.");
             }
             _clientPoller.RunAsync();
         }
@@ -110,9 +112,12 @@ namespace MessageWire
                 {
                     _throwOnSend = true; //do not allow send
                     _hostDead = true;
+                    _logger.Debug("Heartbeat from server skipped {0} time. Host is dead.", 
+                        _maxSkippedHeartBeatReplies);
                 }
                 else
                 {
+                    _logger.Debug("Heartbeat sent.");
                     HeartBeatsSentCount++;
                     _sendQueue.Enqueue(new List<byte[]> { ZkMessageHeader.HeartBeat });
                 }
@@ -138,8 +143,9 @@ namespace MessageWire
             if (null != _session && null != _session.Crypto) return true; //in case it's called twice
 
             _securedSignal = new ManualResetEvent(false);
-            _session = new ZkProtocolClientSession(_identity, _identityKey);
+            _session = new ZkProtocolClientSession(_identity, _identityKey, _logger);
             _sendQueue.Enqueue(_session.CreateInitiationRequest());
+            _logger.Debug("Protocol initiation request sent.");
 
             if (blockUntilComplete)
             {
@@ -164,7 +170,7 @@ namespace MessageWire
         private EventHandler<MessageEventArgs> _receivedEvent;
         private EventHandler<MessageEventArgs> _invalidReceivedEvent;
         private EventHandler<EventArgs> _ecryptionProtocolEstablishedEvent;
-        private EventHandler<EventArgs> _ecryptionProtocolFailedEvent;
+        private EventHandler<ProtocolFailureEventArgs> _ecryptionProtocolFailedEvent;
 
         /// <summary>
         /// This event occurs when a message has been received. 
@@ -215,7 +221,7 @@ namespace MessageWire
         /// </summary>
         /// <remarks>This handler is thread safe occuring on a thread other 
         /// than the thread sending and receiving messages over the wire.</remarks>
-        public event EventHandler<EventArgs> EcryptionProtocolFailed {
+        public event EventHandler<ProtocolFailureEventArgs> EcryptionProtocolFailed {
             add {
                 _ecryptionProtocolFailedEvent += value;
             }
@@ -231,10 +237,12 @@ namespace MessageWire
             if (_disposed) throw new ObjectDisposedException("Client", "Cannot send on disposed client.");
             if (null == frames || frames.Count == 0)
             {
+                _logger.Error("Empty message send attempt failed.");
                 throw new ArgumentException("Cannot be null or empty.", nameof(frames));
             }
             if (_throwOnSend)
             {
+                _logger.Error("Message send attempt failed. Protocol not established.");
                 throw new OperationCanceledException("Encryption protocol not established.");
             }
             _sendQueue.Enqueue(frames);
@@ -250,6 +258,7 @@ namespace MessageWire
             {
                 if (null != _session && null != _session.Crypto)
                 {
+                    //do not encrypt heartbeat message
                     if (frames.Count > 1 || !frames[0].IsEqualTo(ZkMessageHeader.HeartBeat))
                     {
                         //encrypt message frames of regular messages but not heartbeat messages
@@ -265,6 +274,7 @@ namespace MessageWire
                     message.Append(frame);
                 }
                 _dealerSocket.SendMultipartMessage(message);
+                _logger.Debug("Message sent. Frame count: {0}", message.FrameCount);
             }
         }
 
@@ -273,6 +283,7 @@ namespace MessageWire
         private void DealerSocket_ReceiveReady(object sender, NetMQSocketEventArgs e)
         {
             var msg = e.Socket.ReceiveMultipartMessage();
+            _logger.Debug("Message received. Frame count: {0}", msg.FrameCount);
             var message = msg.ToMessageWithoutClientFrame(_clientId);
             _receiveQueue.Enqueue(message.Frames);
         }
@@ -316,6 +327,8 @@ namespace MessageWire
                     frames[i] = _session.Crypto.Decrypt(frames[i]);
                 }
             }
+            _logger.Info("Message received Frame count {0}. Total length {1}.", 
+                frames.Count, frames.Select(x => x.Length).Sum());
             _receivedEvent?.Invoke(this, new MessageEventArgs
             {
                 Message = new Message
@@ -328,6 +341,7 @@ namespace MessageWire
 
         private void OnMessageReceivedFailure(List<byte[]> frames)
         {
+            _logger.Error("Message cannot be processed.");
             _invalidReceivedEvent?.Invoke(this, new MessageEventArgs
             {
                 Message = new Message
@@ -340,6 +354,7 @@ namespace MessageWire
 
         private void ProcessProtocolExchange(List<byte[]> frames)
         {
+            string error = null;
             if (frames[0][2] == ZkMessageHeader.SM0)
             {
                 //send handshake request
@@ -347,10 +362,13 @@ namespace MessageWire
                 if (null != frames1)
                 {
                     _sendQueue.Enqueue(frames1);
+                    _logger.Debug("Protocol handshake request sent.");
                 }
                 else
                 {
-                    _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
+                    error = "Protocol handshake creation failed.";
+                    _logger.Fatal(error);
+                    _ecryptionProtocolFailedEvent?.Invoke(this, new ProtocolFailureEventArgs { Message = error });
                 }
             }
             else if (frames[0][2] == ZkMessageHeader.SM1)
@@ -360,22 +378,37 @@ namespace MessageWire
                 if (null != frames2)
                 {
                     _sendQueue.Enqueue(frames2);
+                    _logger.Debug("Protocol proof request sent.");
                 }
                 else
                 {
-                    _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
+                    error = "Protocol proof creation failed."; 
+                    _logger.Fatal(error);
+                    _ecryptionProtocolFailedEvent?.Invoke(this, new ProtocolFailureEventArgs { Message = error });
                 }
             }
-            else if (frames[0][2] == ZkMessageHeader.SM2
-                && _session.ProcessProofReply(frames)) //complete proof
+            else if (frames[0][2] == ZkMessageHeader.SM2)
+                
             {
-                _throwOnSend = false;
-                if (null != _securedSignal) _securedSignal.Set(); //signal if waiting
-                _ecryptionProtocolEstablishedEvent?.Invoke(this, new EventArgs());
+                if (_session.ProcessProofReply(frames)) //complete proof
+                {
+                    _throwOnSend = false;
+                    if (null != _securedSignal) _securedSignal.Set(); //signal if waiting
+                    _logger.Info("Protocol successfully established.");
+                    _ecryptionProtocolEstablishedEvent?.Invoke(this, new EventArgs());
+                }
+                else
+                {
+                    error = "Protocol process proof failed.";
+                    _logger.Fatal(error);
+                    _ecryptionProtocolFailedEvent?.Invoke(this, new ProtocolFailureEventArgs { Message = error });
+                }
             }
             else
             {
-                _ecryptionProtocolFailedEvent?.Invoke(this, new EventArgs());
+                error = $"Server returned protocol failure code {frames[0][2]}.";
+                _logger.Fatal(error);
+                _ecryptionProtocolFailedEvent?.Invoke(this, new ProtocolFailureEventArgs { Message = error });
             }
         }
 

@@ -67,6 +67,11 @@ namespace MessageWire
         }
     }
 
+    public class ProtocolFailureEventArgs : EventArgs
+    {
+        public string Message { get; set; }
+    }
+
     public class MessageEventArgs : EventArgs
     {
         public Message Message { get; set; }

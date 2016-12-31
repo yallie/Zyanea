@@ -72,8 +72,8 @@ namespace MessageWire
 
             if (null == _authRepository)
             {
-                //no session cleanup required if not secured
                 _hostPoller = new NetMQPoller { _receivedQueue, _sendFailureQueue };
+                _logger.Debug("Hoste created. Protocol NOT enabled.");
             }
             else
             {
@@ -81,6 +81,7 @@ namespace MessageWire
                 _sessionCleanupTimer.Elapsed += SessionCleanupTimer_Elapsed;
                 _hostPoller = new NetMQPoller { _receivedQueue, _sendFailureQueue, _sessionCleanupTimer };
                 _sessionCleanupTimer.Enable = true;
+                _logger.Debug("Host created with protocol enabled.");
             }
             _hostPoller.RunAsync();
         }
@@ -159,6 +160,7 @@ namespace MessageWire
             if (_disposed) throw new ObjectDisposedException("Client", "Cannot send on disposed client.");
             if (null == frames || frames.Count == 0)
             {
+                _logger.Error("Send message failed. Empty message.");
                 throw new ArgumentException("Cannot be null or empty.", nameof(frames));
             }
             var message = new NetMQMessage();
@@ -174,6 +176,7 @@ namespace MessageWire
                 }
                 else
                 {
+                    _logger.Error("Send message failed. Protocol not established for this client {0}.", clientId);
                     throw new OperationCanceledException("Encrypted session not established.");
                 }
             }
@@ -193,11 +196,12 @@ namespace MessageWire
                 try
                 {
                     _routerSocket.SendMultipartMessage(message);
+                    _logger.Info("Message sent with {0} frames.", message.FrameCount);
                 }
                 catch (Exception ex) //clientId not found or other error, raise event
                 {
                     var unreachable = ex as HostUnreachableException;
-                    //send by message to host poller
+                    _logger.Error("Error sending message to {0} with {1} frames.", new Guid(message.First.Buffer), message.FrameCount);
                     _sendFailureQueue.Enqueue(new MessageFailure
                     {
                         Message = message.ToMessageWithClientFrame(),
@@ -213,6 +217,7 @@ namespace MessageWire
         {
             var msg = e.Socket.ReceiveMultipartMessage();
             if (null == msg || msg.FrameCount < 2) return; //ignore this message - nothing in it
+            _logger.Debug("Message received. Frame count: {0}", msg.FrameCount);
             var message = msg.ToMessageWithClientFrame();
             _receivedQueue.Enqueue(message); //sends by message to host poller
         }
@@ -223,6 +228,7 @@ namespace MessageWire
             MessageFailure mf;
             if (e.Queue.TryDequeue(out mf, new TimeSpan(1000)))
             {
+                _logger.Error("Send failed {0}, {1}", mf.ErrorCode, mf.ErrorMessage);
                 _sentFailureEvent?.Invoke(this, new MessageEventFailureArgs
                 {
                     Failure = mf
@@ -242,7 +248,7 @@ namespace MessageWire
                 }
                 else if (null == _authRepository)
                 {
-                    ProcessRegularMessage(message);
+                    ProcessRegularMessage(message, null);
                 }
                 else
                 {
@@ -263,11 +269,22 @@ namespace MessageWire
                 heartBeatResponse.AppendEmptyFrame();
                 heartBeatResponse.Append(ZkMessageHeader.HeartBeat);
                 _sendQueue.Enqueue(heartBeatResponse);
+                _logger.Info("Heartbeat received from {0} and response sent.", session.ClientId);
             }
         }
 
-        private void ProcessRegularMessage(Message message)
+        private void ProcessRegularMessage(Message message, ZkProtocolHostSession session)
         {
+            _logger.Info("Message received from {0}. Frame count {1}. Total length {2}.",
+                message.ClientId, message.Frames.Count, message.Frames.Select(x => x.Length).Sum());
+            if (null != session && null != session.Crypto)
+            {
+                session.RecordMessageReceived();
+                for (int i = 0; i < message.Frames.Count; i++)
+                {
+                    message.Frames[i] = session.Crypto.Decrypt(message.Frames[i]);
+                }
+            }
             _receivedEvent?.Invoke(this, new MessageEventArgs
             {
                 Message = message
@@ -280,43 +297,38 @@ namespace MessageWire
             if (!_sessions.TryGetValue(message.ClientId, out session)) session = null;
             if (IsHandshakeRequest(message.Frames))
             {
-                if (null == session)
-                {
-                    session = new ZkProtocolHostSession(_authRepository, message.ClientId);
-                    _sessions.TryAdd(message.ClientId, session);
-                }
-                var responseFrames = session.ProcessProtocolRequest(message.Frames);
-                var msg = new NetMQMessage();
-                msg.Append(message.ClientId.ToByteArray());
-                msg.AppendEmptyFrame();
-                foreach (var frame in responseFrames) msg.Append(frame);
-                _sendQueue.Enqueue(msg); //send by message to socket poller
-
-                //if second reply and success, raise event, new client session?
-                if (responseFrames[0].IsEqualTo(ZkMessageHeader.ProofResponseSuccess))
-                {
-                    _zkClientSessionEstablishedEvent?.Invoke(this, new MessageEventArgs
-                    {
-                        Message = new Message
-                        {
-                            ClientId = message.ClientId
-                        }
-                    });
-                }
+                ProcessProtocolExchange(message, session);
             }
             else
             {
-                if (null != session && null != session.Crypto)
+                ProcessRegularMessage(message, session);
+            }
+        }
+
+        private void ProcessProtocolExchange(Message message, ZkProtocolHostSession session)
+        {
+            if (null == session)
+            {
+                session = new ZkProtocolHostSession(_authRepository, message.ClientId, _logger);
+                _sessions.TryAdd(message.ClientId, session);
+                _logger.Debug("Protocol session created for {0}.", message.ClientId);
+            }
+            var responseFrames = session.ProcessProtocolRequest(message);
+            var msg = new NetMQMessage();
+            msg.Append(message.ClientId.ToByteArray());
+            msg.AppendEmptyFrame();
+            foreach (var frame in responseFrames) msg.Append(frame);
+            _sendQueue.Enqueue(msg); //send by message to socket poller
+
+            //if second reply and success, raise event, new client session?
+            if (responseFrames[0].IsEqualTo(ZkMessageHeader.ProofResponseSuccess))
+            {
+                _zkClientSessionEstablishedEvent?.Invoke(this, new MessageEventArgs
                 {
-                    session.RecordMessageReceived();
-                    for (int i = 0; i < message.Frames.Count; i++)
+                    Message = new Message
                     {
-                        message.Frames[i] = session.Crypto.Decrypt(message.Frames[i]);
+                        ClientId = message.ClientId
                     }
-                }
-                _receivedEvent?.Invoke(this, new MessageEventArgs
-                {
-                    Message = message
                 });
             }
         }
@@ -328,10 +340,14 @@ namespace MessageWire
             var timedOutKeys = (from n in _sessions
                             where (now - n.Value.LastMessageReceived).TotalMinutes > _sessionTimeoutMins
                             select n.Key).ToArray();
-            foreach (var key in timedOutKeys)
+            if (timedOutKeys.Length > 0)
             {
-                ZkProtocolHostSession session;
-                _sessions.TryRemove(key, out session);
+                foreach (var key in timedOutKeys)
+                {
+                    ZkProtocolHostSession session;
+                    _sessions.TryRemove(key, out session);
+                }
+                _logger.Debug("Protocol sessions cleaned up: Count {0}.", timedOutKeys.Length);
             }
         }
 

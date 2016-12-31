@@ -5,6 +5,7 @@ using System.Security;
 using System.Text;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
+using MessageWire.Logging;
 
 namespace MessageWire.ZeroKnowledge
 {
@@ -13,6 +14,7 @@ namespace MessageWire.ZeroKnowledge
         private readonly ZkProtocol _protocol;
         private readonly string _identity;
         private readonly string _identityKey;
+        private readonly ILog _logger;
 
         private byte[] _clientEphemeralA = null;
         private byte[] _clientSessionHash = null;
@@ -25,10 +27,11 @@ namespace MessageWire.ZeroKnowledge
 
         private DateTime _lastHeartBeatResponse = DateTime.UtcNow;
 
-        public ZkProtocolClientSession(string id, string key)
+        public ZkProtocolClientSession(string identity, string identityKey, ILog logger)
         {
-            _identity = id;
-            _identityKey = key;
+            _identity = identity;
+            _identityKey = identityKey;
+            _logger = logger ?? new NullLogger();
             _protocol = new ZkProtocol();
         }
 
@@ -146,7 +149,7 @@ namespace MessageWire.ZeroKnowledge
             {
                 return false;
             }
-            _zkCrypto = new ZkCrypto(_clientSessionKey, _scramble);
+            _zkCrypto = new ZkCrypto(_clientSessionKey, _scramble, _logger);
             return true;
         }
     }

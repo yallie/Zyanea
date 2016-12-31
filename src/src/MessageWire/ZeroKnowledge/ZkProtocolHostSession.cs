@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MessageWire.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security;
@@ -14,6 +15,7 @@ namespace MessageWire.ZeroKnowledge
         private readonly IZkRepository _repository;
         private readonly Guid _clientId;
         private readonly DateTime _created;
+        private readonly ILog _logger;
 
         private string _clientIpAddress = null;
         private string _identity = null;
@@ -32,10 +34,11 @@ namespace MessageWire.ZeroKnowledge
         private RSAParameters _clientPublicKey = default(RSAParameters);
 
 
-        public ZkProtocolHostSession(IZkRepository repository, Guid clientId)
+        public ZkProtocolHostSession(IZkRepository repository, Guid clientId, ILog logger)
         {
             _repository = repository;
             _clientId = clientId;
+            _logger = logger ?? new NullLogger();
             _created = DateTime.UtcNow;
             _lastMessageReceived = _created;
             _protocol = new ZkProtocol();
@@ -68,24 +71,27 @@ namespace MessageWire.ZeroKnowledge
             }
         }
 
-        public List<byte[]> ProcessProtocolRequest(List<byte[]> frames)
+        public List<byte[]> ProcessProtocolRequest(Message message)
         {
+            var frames = message.Frames;
             if (frames[0][2] == ZkMessageHeader.CM0)
-                return ProcessInitiationRequest(frames);
+                return ProcessInitiationRequest(message);
             else if (frames[0][2] == ZkMessageHeader.CM1)
-                return ProcessHandshakeRequest(frames);
+                return ProcessHandshakeRequest(message);
             else
-                return ProcessProofRequest(frames);
+                return ProcessProofRequest(message);
         }
 
-        private List<byte[]> ProcessInitiationRequest(List<byte[]> frames)
+        private List<byte[]> ProcessInitiationRequest(Message message)
         {
+            var frames = message.Frames;
             var list = new List<byte[]>();
             if (frames.Count != 2)
             {
                 list.Add(ZkMessageHeader.HandshakeResponseFailure);
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
+                _logger.Debug("Protocol initiation failed for {0}.", message.ClientId);
             }
             else
             {
@@ -97,18 +103,21 @@ namespace MessageWire.ZeroKnowledge
                 }
                 list.Add(ZkMessageHeader.InititaionResponseSuccess);
                 list.Add(_serverPublicKey.ToBytes());
+                _logger.Debug("Protocol initiation completed for {0}.", message.ClientId);
             }
             return list;
         }
 
-        private List<byte[]> ProcessHandshakeRequest(List<byte[]> frames)
+        private List<byte[]> ProcessHandshakeRequest(Message message)
         {
+            var frames = message.Frames;
             var list = new List<byte[]>();
             if (frames.Count != 4)
             {
                 list.Add(ZkMessageHeader.HandshakeResponseFailure);
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
+                _logger.Debug("Protocol handshake failed for {0}.", message.ClientId);
             }
             else
             {
@@ -126,6 +135,7 @@ namespace MessageWire.ZeroKnowledge
                     list.Add(ZkMessageHeader.HandshakeResponseFailure);
                     list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                     list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
+                    _logger.Debug("Protocol handshake failed for {0}.", message.ClientId);
                 }
                 else
                 {
@@ -144,13 +154,15 @@ namespace MessageWire.ZeroKnowledge
                         list.Add(rsa.Encrypt(_identityHash.Salt, RSAEncryptionPadding.Pkcs1));
                         list.Add(rsa.Encrypt(_serverEphemeralB, RSAEncryptionPadding.Pkcs1));
                     }
+                    _logger.Debug("Protocol handshake completed for {0}.", message.ClientId);
                 }
             }
             return list;
         }
 
-        private List<byte[]> ProcessProofRequest(List<byte[]> frames)
+        private List<byte[]> ProcessProofRequest(Message message)
         {
+            var frames = message.Frames;
             if (frames.Count != 2) throw new ArgumentException("Invalid frame count.", nameof(frames));
 
             byte[] clientSessionHash = frames[1];
@@ -169,12 +181,13 @@ namespace MessageWire.ZeroKnowledge
             {
                 list.Add(ZkMessageHeader.ProofResponseFailure);
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
+                _logger.Debug("Protocol proof failed for {0}.", message.ClientId);
             }
             else
             {
                 var serverSessionHash = _protocol.ServerCreateSessionHash(_clientEphemeralA, 
                     clientSessionHash, _serverSessionKey);
-                _zkCrypto = new ZkCrypto(_serverSessionKey, _scramble);
+                _zkCrypto = new ZkCrypto(_serverSessionKey, _scramble, _logger);
 
                 list.Add(ZkMessageHeader.ProofResponseSuccess);
                 using (var rsa = RSA.Create())
@@ -182,6 +195,7 @@ namespace MessageWire.ZeroKnowledge
                     rsa.ImportParameters(_clientPublicKey);
                     list.Add(rsa.Encrypt(serverSessionHash, RSAEncryptionPadding.Pkcs1));
                 }
+                _logger.Debug("Protocol proof completed for {0}.", message.ClientId);
             }
             return list;
         }
