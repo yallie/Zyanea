@@ -10,7 +10,7 @@
     "copyright": "Tyler Jensen 2016",
     "owners": [ "Tyler Jensen" ],
     "summary": "MessageWire is a Zero Knowledge authentication and encryption wrapper for a NetMQ Dealer socket (client) Router socket (server) combination.",
-    "releaseNotes": "Written for netstandard1.3 so .NET Framework 4.6 and Core 1.0 and up are supported.",
+    "releaseNotes": "Written for netstandard1.3 so .NET Framework 4.6 and Core 1.0 and up are supported. Complete and ready for use.",
     "tags": [ "TCP", "Messaging", "Zero-Knowledge-Proof", "Secure-Remote-Password-Protocol" ]
   },
   "version": "1.0.3-*",
