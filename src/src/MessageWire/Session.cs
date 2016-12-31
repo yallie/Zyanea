@@ -15,6 +15,22 @@ namespace MessageWire
             _session = session;
         }
 
+        public Guid ClientId {
+            get {
+                return _session.ClientId;
+            }
+        }
+        public string ClientIpAddress {
+            get {
+                return _session.ClientIpAddress;
+            }
+        }
+        public string ClientIdentity {
+            get {
+                return _session.ClientIdentity;
+            }
+        }
+
         public DateTime Created {
             get {
                 return _session.Created;

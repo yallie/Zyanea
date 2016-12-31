@@ -41,6 +41,9 @@ namespace MessageWire.ZeroKnowledge
             _protocol = new ZkProtocol();
         }
 
+        public Guid ClientId { get { return _clientId; } }
+        public string ClientIpAddress { get { return _clientIpAddress; } }
+        public string ClientIdentity { get { return _identity; } }
         public DateTime Created { get { return _created; } }
         public DateTime LastMessageReceived { get { return _lastMessageReceived; } }
         public DateTime LastHeartbeatReceived { get { return _lastHeartbeatReceived; } }

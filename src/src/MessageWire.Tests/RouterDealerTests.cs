@@ -229,6 +229,8 @@ namespace MessageWire.Tests
                     Assert.Equal(1, serverKeys.Length);
                     var session = server.GetSession(serverKeys[0]);
                     Assert.NotNull(session);
+                    Assert.True("testid" == session.ClientIdentity, "Client identity does not match.");
+                    Assert.True(client.ClientId == session.ClientId, "ClientId does not match.");
                     Assert.True(session.HeartBeatsReceivedCount > 1, "Server failed to receive heartbeats.");
                 }
             }
