@@ -1,31 +1,47 @@
-﻿using MessageWire.Logging;
+﻿/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+ *  MessageWire - https://github.com/tylerjensen/MessageWire
+ *  
+ * The MIT License (MIT)
+ * Copyright (C) 2016-2017 Tyler Jensen
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
+ * documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+ * and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED 
+ * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL 
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF 
+ * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ * DEALINGS IN THE SOFTWARE.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+using MessageWire.Logging;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Security;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
-namespace MessageWire.ZeroKnowledge
+namespace MessageWire.SecureRemote
 {
-    internal class ZkProtocolHostSession : IEquatable<ZkProtocolHostSession>
+    internal class HostSession : IEquatable<HostSession>
     {
-        private readonly ZkProtocol _protocol;
-        private readonly IZkRepository _repository;
+        private readonly Protocol _protocol;
+        private readonly IKeyRepository _repository;
         private readonly Guid _clientId;
         private readonly DateTime _created;
         private readonly ILog _logger;
 
         private string _clientIpAddress = null;
         private string _identity = null;
-        private ZkIdentityKeyHash _identityHash = null;
+        private IdentityKeyHash _identityHash = null;
         private byte[] _scramble = null;
         private byte[] _serverSessionKey = null;
         private byte[] _clientEphemeralA = null;
         private byte[] _serverEphemeralB = null;
 
-        private ZkCrypto _zkCrypto = null;
+        private Crypto _zkCrypto = null;
         private DateTime _lastHeartbeatReceived = DateTime.UtcNow;
         private DateTime _lastMessageReceived = DateTime.UtcNow;
 
@@ -34,14 +50,14 @@ namespace MessageWire.ZeroKnowledge
         private RSAParameters _clientPublicKey = default(RSAParameters);
 
 
-        public ZkProtocolHostSession(IZkRepository repository, Guid clientId, ILog logger)
+        public HostSession(IKeyRepository repository, Guid clientId, ILog logger)
         {
             _repository = repository;
             _clientId = clientId;
             _logger = logger ?? new NullLogger();
             _created = DateTime.UtcNow;
             _lastMessageReceived = _created;
-            _protocol = new ZkProtocol();
+            _protocol = new Protocol();
         }
 
         public Guid ClientId { get { return _clientId; } }
@@ -63,7 +79,7 @@ namespace MessageWire.ZeroKnowledge
             _lastMessageReceived = DateTime.UtcNow;
         }
 
-        public ZkCrypto Crypto 
+        public Crypto Crypto 
         {
             get 
             {
@@ -74,9 +90,9 @@ namespace MessageWire.ZeroKnowledge
         public List<byte[]> ProcessProtocolRequest(Message message)
         {
             var frames = message.Frames;
-            if (frames[0][2] == ZkMessageHeader.CM0)
+            if (frames[0][2] == MessageHeader.CM0)
                 return ProcessInitiationRequest(message);
-            else if (frames[0][2] == ZkMessageHeader.CM1)
+            else if (frames[0][2] == MessageHeader.CM1)
                 return ProcessHandshakeRequest(message);
             else
                 return ProcessProofRequest(message);
@@ -88,7 +104,7 @@ namespace MessageWire.ZeroKnowledge
             var list = new List<byte[]>();
             if (frames.Count != 2)
             {
-                list.Add(ZkMessageHeader.HandshakeResponseFailure);
+                list.Add(MessageHeader.HandshakeResponseFailure);
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                 _logger.Debug("Protocol initiation failed for {0}.", message.ClientId);
@@ -101,7 +117,7 @@ namespace MessageWire.ZeroKnowledge
                     _serverPublicPrivateKey = rsa.ExportParameters(true);
                     _serverPublicKey = rsa.ExportParameters(false);
                 }
-                list.Add(ZkMessageHeader.InititaionResponseSuccess);
+                list.Add(MessageHeader.InititaionResponseSuccess);
                 list.Add(_serverPublicKey.ToBytes());
                 _logger.Debug("Protocol initiation completed for {0}.", message.ClientId);
             }
@@ -114,7 +130,7 @@ namespace MessageWire.ZeroKnowledge
             var list = new List<byte[]>();
             if (frames.Count != 4)
             {
-                list.Add(ZkMessageHeader.HandshakeResponseFailure);
+                list.Add(MessageHeader.HandshakeResponseFailure);
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                 _logger.Debug("Protocol handshake failed for {0}.", message.ClientId);
@@ -132,7 +148,7 @@ namespace MessageWire.ZeroKnowledge
 
                 if (null == _identityHash)
                 {
-                    list.Add(ZkMessageHeader.HandshakeResponseFailure);
+                    list.Add(MessageHeader.HandshakeResponseFailure);
                     list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                     list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                     _logger.Debug("Protocol handshake failed for {0}.", message.ClientId);
@@ -147,7 +163,7 @@ namespace MessageWire.ZeroKnowledge
                     _serverSessionKey = _protocol.ServerComputeSessionKey(_identityHash.Salt, _identityHash.Key,
                         _clientEphemeralA, _serverEphemeralB, _scramble);
 
-                    list.Add(ZkMessageHeader.HandshakeResponseSuccess);
+                    list.Add(MessageHeader.HandshakeResponseSuccess);
                     using (var rsa = RSA.Create())
                     {
                         rsa.ImportParameters(_clientPublicKey);
@@ -179,7 +195,7 @@ namespace MessageWire.ZeroKnowledge
             var list = new List<byte[]>();
             if (!clientSessionHash.IsEqualTo(serverClientSessionHash))
             {
-                list.Add(ZkMessageHeader.ProofResponseFailure);
+                list.Add(MessageHeader.ProofResponseFailure);
                 list.Add(_protocol.ComputeHash(_protocol.CryptRand()));
                 _logger.Debug("Protocol proof failed for {0}.", message.ClientId);
             }
@@ -187,9 +203,9 @@ namespace MessageWire.ZeroKnowledge
             {
                 var serverSessionHash = _protocol.ServerCreateSessionHash(_clientEphemeralA, 
                     clientSessionHash, _serverSessionKey);
-                _zkCrypto = new ZkCrypto(_serverSessionKey, _scramble, _logger);
+                _zkCrypto = new Crypto(_serverSessionKey, _scramble, _logger);
 
-                list.Add(ZkMessageHeader.ProofResponseSuccess);
+                list.Add(MessageHeader.ProofResponseSuccess);
                 using (var rsa = RSA.Create())
                 {
                     rsa.ImportParameters(_clientPublicKey);
@@ -200,17 +216,17 @@ namespace MessageWire.ZeroKnowledge
             return list;
         }
 
-        bool IEquatable<ZkProtocolHostSession>.Equals(ZkProtocolHostSession other)
+        bool IEquatable<HostSession>.Equals(HostSession other)
         {
             return Equals(other);
         }
 
         public override bool Equals(object obj)
         {
-            return Equals(obj as ZkProtocolHostSession);
+            return Equals(obj as HostSession);
         }
 
-        public bool Equals(ZkProtocolHostSession other)
+        public bool Equals(HostSession other)
         {
             return _clientId.Equals(other);
         }

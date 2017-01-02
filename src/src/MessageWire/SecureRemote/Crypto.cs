@@ -1,19 +1,38 @@
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+ *  MessageWire - https://github.com/tylerjensen/MessageWire
+ *  
+ * The MIT License (MIT)
+ * Copyright (C) 2016-2017 Tyler Jensen
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
+ * documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+ * and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED 
+ * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL 
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF 
+ * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ * DEALINGS IN THE SOFTWARE.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
 using MessageWire.Logging;
 using System;
 using System.Security.Cryptography;
 
-namespace MessageWire.ZeroKnowledge
+namespace MessageWire.SecureRemote
 {
     /// <summary>
     /// Easy to use encapsulation of Rijndael encryption.
     /// </summary>
-    public class ZkCrypto
+    internal class Crypto
     {
         private readonly byte[] _key;
         private readonly byte[] _iv;
         private readonly ILog _logger;
 
-        public ZkCrypto(byte[] key, byte[] iv, ILog logger)
+        public Crypto(byte[] key, byte[] iv, ILog logger)
         {
             if (key.Length != 32) throw new ArgumentException("key must be 256 bits", "key");
             if (iv.Length != 16) throw new ArgumentException("iv must be 128 bits", "iv");

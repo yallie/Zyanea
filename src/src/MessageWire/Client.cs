@@ -1,15 +1,30 @@
-﻿using MessageWire.Logging;
-using MessageWire.ZeroKnowledge;
-using NetMQ;
-using NetMQ.Sockets;
+﻿/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+ *  MessageWire - https://github.com/tylerjensen/MessageWire
+ *  
+ * The MIT License (MIT)
+ * Copyright (C) 2016-2017 Tyler Jensen
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
+ * documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+ * and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED 
+ * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL 
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF 
+ * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ * DEALINGS IN THE SOFTWARE.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+using MessageWire.Logging;
+using MessageWire.SecureRemote;
+using NetMQ;
+using NetMQ.Sockets;
 
 namespace MessageWire
 {
@@ -33,7 +48,7 @@ namespace MessageWire
         private readonly int _heartBeatMs;
         private readonly int _maxSkippedHeartBeatReplies;
 
-        private ZkProtocolClientSession _session = null;
+        private ClientSession _session = null;
         private bool _throwOnSend = false;
         private bool _hostDead = false;
 
@@ -119,7 +134,7 @@ namespace MessageWire
                 {
                     _logger.Debug("Heartbeat sent.");
                     HeartBeatsSentCount++;
-                    _sendQueue.Enqueue(new List<byte[]> { ZkMessageHeader.HeartBeat });
+                    _sendQueue.Enqueue(new List<byte[]> { MessageHeader.HeartBeat });
                 }
             }
             else
@@ -143,7 +158,7 @@ namespace MessageWire
             if (null != _session && null != _session.Crypto) return true; //in case it's called twice
 
             _securedSignal = new ManualResetEvent(false);
-            _session = new ZkProtocolClientSession(_identity, _identityKey, _logger);
+            _session = new ClientSession(_identity, _identityKey, _logger);
             _sendQueue.Enqueue(_session.CreateInitiationRequest());
             _logger.Debug("Protocol initiation request sent.");
 
@@ -259,7 +274,7 @@ namespace MessageWire
                 if (null != _session && null != _session.Crypto)
                 {
                     //do not encrypt heartbeat message
-                    if (frames.Count > 1 || !frames[0].IsEqualTo(ZkMessageHeader.HeartBeat))
+                    if (frames.Count > 1 || !frames[0].IsEqualTo(MessageHeader.HeartBeat))
                     {
                         //encrypt message frames of regular messages but not heartbeat messages
                         for (int i = 0; i < frames.Count; i++)
@@ -294,7 +309,7 @@ namespace MessageWire
             List<byte[]> frames;
             if (e.Queue.TryDequeue(out frames, new TimeSpan(1000)))
             {
-                if (frames[0].IsEqualTo(ZkMessageHeader.HeartBeat))
+                if (frames[0].IsEqualTo(MessageHeader.HeartBeat))
                 {
                     HeartBeatsReceivedCount++;
                     _session?.RecordHeartBeat();
@@ -355,7 +370,7 @@ namespace MessageWire
         private void ProcessProtocolExchange(List<byte[]> frames)
         {
             string error = null;
-            if (frames[0][2] == ZkMessageHeader.SM0)
+            if (frames[0][2] == MessageHeader.SM0)
             {
                 //send handshake request
                 var frames1 = _session.CreateHandshakeRequest(_identity, frames);
@@ -371,7 +386,7 @@ namespace MessageWire
                     _ecryptionProtocolFailedEvent?.Invoke(this, new ProtocolFailureEventArgs { Message = error });
                 }
             }
-            else if (frames[0][2] == ZkMessageHeader.SM1)
+            else if (frames[0][2] == MessageHeader.SM1)
             {
                 //send proof
                 var frames2 = _session.CreateProofRequest(frames);
@@ -387,7 +402,7 @@ namespace MessageWire
                     _ecryptionProtocolFailedEvent?.Invoke(this, new ProtocolFailureEventArgs { Message = error });
                 }
             }
-            else if (frames[0][2] == ZkMessageHeader.SM2)
+            else if (frames[0][2] == MessageHeader.SM2)
                 
             {
                 if (_session.ProcessProofReply(frames)) //complete proof
@@ -417,16 +432,16 @@ namespace MessageWire
             return (null != frames
                 && (frames.Count == 2 || frames.Count == 3)
                 && frames[0].Length == 4
-                && frames[0][0] == ZkMessageHeader.SOH
-                && frames[0][1] == ZkMessageHeader.ACK
-                && (frames[0][2] == ZkMessageHeader.FF0
-                   || frames[0][2] == ZkMessageHeader.SM0
-                   || frames[0][2] == ZkMessageHeader.SF0
-                   || frames[0][2] == ZkMessageHeader.SM1
-                   || frames[0][2] == ZkMessageHeader.SF1
-                   || frames[0][2] == ZkMessageHeader.SM2
-                   || frames[0][2] == ZkMessageHeader.SF2)
-                && frames[0][3] == ZkMessageHeader.BEL);
+                && frames[0][0] == MessageHeader.SOH
+                && frames[0][1] == MessageHeader.ACK
+                && (frames[0][2] == MessageHeader.FF0
+                   || frames[0][2] == MessageHeader.SM0
+                   || frames[0][2] == MessageHeader.SF0
+                   || frames[0][2] == MessageHeader.SM1
+                   || frames[0][2] == MessageHeader.SF1
+                   || frames[0][2] == MessageHeader.SM2
+                   || frames[0][2] == MessageHeader.SF2)
+                && frames[0][3] == MessageHeader.BEL);
         }
 
 

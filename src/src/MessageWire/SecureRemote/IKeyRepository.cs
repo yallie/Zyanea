@@ -17,15 +17,18 @@
  * DEALINGS IN THE SOFTWARE.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-namespace MessageWire.Logging
+namespace MessageWire.SecureRemote
 {
-    public enum LogLevel
+    public interface IKeyRepository
     {
-        None = 0,
-        Fatal = 1,
-        Error = 2,
-        Warn = 3,
-        Info = 4,
-        Debug = 5
+        IdentityKeyHash GetIdentityKeyHashSet(string identity);
+    }
+
+    public class ZkNullRepository : IKeyRepository
+    {
+        public IdentityKeyHash GetIdentityKeyHashSet(string identity)
+        {
+            return null;
+        }
     }
 }

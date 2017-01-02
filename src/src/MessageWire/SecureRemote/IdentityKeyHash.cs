@@ -1,4 +1,4 @@
-﻿/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
  *  MessageWire - https://github.com/tylerjensen/MessageWire
  *  
  * The MIT License (MIT)
@@ -17,15 +17,12 @@
  * DEALINGS IN THE SOFTWARE.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-namespace MessageWire.Logging
+namespace MessageWire.SecureRemote
 {
-    public enum LogLevel
+    public class IdentityKeyHash
     {
-        None = 0,
-        Fatal = 1,
-        Error = 2,
-        Warn = 3,
-        Info = 4,
-        Debug = 5
+        public byte[] Salt { get; set; }
+        public byte[] Key { get; set; }
+        public byte[] Verifier { get; set; }
     }
 }

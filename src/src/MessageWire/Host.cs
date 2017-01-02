@@ -1,14 +1,30 @@
-﻿using MessageWire.Logging;
-using MessageWire.ZeroKnowledge;
-using NetMQ;
-using NetMQ.Sockets;
+﻿/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+ *  MessageWire - https://github.com/tylerjensen/MessageWire
+ *  
+ * The MIT License (MIT)
+ * Copyright (C) 2016-2017 Tyler Jensen
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
+ * documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+ * and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED 
+ * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL 
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF 
+ * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ * DEALINGS IN THE SOFTWARE.
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Text;
-using System.Threading.Tasks;
+using MessageWire.Logging;
+using MessageWire.SecureRemote;
+using NetMQ;
+using NetMQ.Sockets;
 
 namespace MessageWire
 {
@@ -27,8 +43,8 @@ namespace MessageWire
         private readonly NetMQQueue<MessageFailure> _sendFailureQueue;
         private readonly NetMQTimer _sessionCleanupTimer = null;
 
-        private readonly IZkRepository _authRepository;
-        private readonly ConcurrentDictionary<Guid, ZkProtocolHostSession> _sessions;
+        private readonly IKeyRepository _authRepository;
+        private readonly ConcurrentDictionary<Guid, HostSession> _sessions;
         private readonly int _sessionTimeoutMins;
 
         /// <summary>
@@ -41,7 +57,7 @@ namespace MessageWire
         /// <param name="sessionTimeoutMins">Session timout check interval. If no heartbeats or messages 
         /// received on a given session in this period of time, the session will be removed from memory 
         /// and futher attempts from the client will fail. Default is 20 minutes. Min is 1 and Max is 3600.</param>
-        public Host(string connectionString, IZkRepository authRepository = null, 
+        public Host(string connectionString, IKeyRepository authRepository = null, 
             ILog logger = null, IStats stats = null, int sessionTimeoutMins = 20)
         {
             if (string.IsNullOrWhiteSpace(connectionString)) throw new ArgumentNullException("Connection string cannot be null.", nameof(connectionString));
@@ -55,7 +71,7 @@ namespace MessageWire
                 : (sessionTimeoutMins > 3600) ? 3600 : sessionTimeoutMins;
 
             _authRepository = authRepository;
-            _sessions = new ConcurrentDictionary<Guid, ZkProtocolHostSession>();
+            _sessions = new ConcurrentDictionary<Guid, HostSession>();
             _sendQueue = new NetMQQueue<NetMQMessage>();
 
             _routerSocket = new RouterSocket(_connectionString);
@@ -104,7 +120,7 @@ namespace MessageWire
 
         public Session GetSession(Guid key)
         {
-            ZkProtocolHostSession session;
+            HostSession session;
             if (_sessions.TryGetValue(key, out session))
             {
                 return new Session(session);
@@ -168,7 +184,7 @@ namespace MessageWire
             message.AppendEmptyFrame();
             if (null != _authRepository)
             {
-                ZkProtocolHostSession session = null;
+                HostSession session = null;
                 if (!_sessions.TryGetValue(clientId, out session)) session = null;
                 if (null != session && null != session.Crypto)
                 {
@@ -242,7 +258,7 @@ namespace MessageWire
             Message message;
             if (e.Queue.TryDequeue(out message, new TimeSpan(1000)))
             {
-                if (message.Frames[0].IsEqualTo(ZkMessageHeader.HeartBeat))
+                if (message.Frames[0].IsEqualTo(MessageHeader.HeartBeat))
                 {
                     ProcessHeartBeat(message);
                 }
@@ -259,7 +275,7 @@ namespace MessageWire
 
         private void ProcessHeartBeat(Message message)
         {
-            ZkProtocolHostSession session = null;
+            HostSession session = null;
             if (!_sessions.TryGetValue(message.ClientId, out session)) session = null;
             if (null != session)
             {
@@ -267,13 +283,13 @@ namespace MessageWire
                 var heartBeatResponse = new NetMQMessage();
                 heartBeatResponse.Append(message.ClientId.ToByteArray());
                 heartBeatResponse.AppendEmptyFrame();
-                heartBeatResponse.Append(ZkMessageHeader.HeartBeat);
+                heartBeatResponse.Append(MessageHeader.HeartBeat);
                 _sendQueue.Enqueue(heartBeatResponse);
                 _logger.Info("Heartbeat received from {0} and response sent.", session.ClientId);
             }
         }
 
-        private void ProcessRegularMessage(Message message, ZkProtocolHostSession session)
+        private void ProcessRegularMessage(Message message, HostSession session)
         {
             _logger.Info("Message received from {0}. Frame count {1}. Total length {2}.",
                 message.ClientId, message.Frames.Count, message.Frames.Select(x => x.Length).Sum());
@@ -293,7 +309,7 @@ namespace MessageWire
 
         private void ProcessProtectedMessage(Message message)
         {
-            ZkProtocolHostSession session = null;
+            HostSession session = null;
             if (!_sessions.TryGetValue(message.ClientId, out session)) session = null;
             if (IsHandshakeRequest(message.Frames))
             {
@@ -305,11 +321,11 @@ namespace MessageWire
             }
         }
 
-        private void ProcessProtocolExchange(Message message, ZkProtocolHostSession session)
+        private void ProcessProtocolExchange(Message message, HostSession session)
         {
             if (null == session)
             {
-                session = new ZkProtocolHostSession(_authRepository, message.ClientId, _logger);
+                session = new HostSession(_authRepository, message.ClientId, _logger);
                 _sessions.TryAdd(message.ClientId, session);
                 _logger.Debug("Protocol session created for {0}.", message.ClientId);
             }
@@ -321,7 +337,7 @@ namespace MessageWire
             _sendQueue.Enqueue(msg); //send by message to socket poller
 
             //if second reply and success, raise event, new client session?
-            if (responseFrames[0].IsEqualTo(ZkMessageHeader.ProofResponseSuccess))
+            if (responseFrames[0].IsEqualTo(MessageHeader.ProofResponseSuccess))
             {
                 _zkClientSessionEstablishedEvent?.Invoke(this, new MessageEventArgs
                 {
@@ -344,7 +360,7 @@ namespace MessageWire
             {
                 foreach (var key in timedOutKeys)
                 {
-                    ZkProtocolHostSession session;
+                    HostSession session;
                     _sessions.TryRemove(key, out session);
                 }
                 _logger.Debug("Protocol sessions cleaned up: Count {0}.", timedOutKeys.Length);
@@ -356,12 +372,12 @@ namespace MessageWire
             return (null != frames
                 && (frames.Count == 2 || frames.Count == 4)
                 && frames[0].Length == 4
-                && frames[0][0] == ZkMessageHeader.SOH
-                && frames[0][1] == ZkMessageHeader.ENQ
-                && ((frames[0][2] == ZkMessageHeader.CM0 && frames.Count == 2)
-                    || (frames[0][2] == ZkMessageHeader.CM1 && frames.Count == 4)
-                    || (frames[0][2] == ZkMessageHeader.CM2 && frames.Count == 2))
-                && frames[0][3] == ZkMessageHeader.BEL);
+                && frames[0][0] == MessageHeader.SOH
+                && frames[0][1] == MessageHeader.ENQ
+                && ((frames[0][2] == MessageHeader.CM0 && frames.Count == 2)
+                    || (frames[0][2] == MessageHeader.CM1 && frames.Count == 4)
+                    || (frames[0][2] == MessageHeader.CM2 && frames.Count == 2))
+                && frames[0][3] == MessageHeader.BEL);
         }
 
 
