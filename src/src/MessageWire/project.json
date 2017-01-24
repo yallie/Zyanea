@@ -10,7 +10,7 @@
     "copyright": "Tyler Jensen 2016",
     "owners": [ "Tyler Jensen" ],
     "summary": "MessageWire is a Secure Remote Password Protocol v6 implementation, a kind of zero Knowledge proof, that enables secure authentication and encryption without passing the actual identity key (password) or any other knowledge required to crack the encryption for messages exchanged between client (dealer socket) and server (router socket) using the NetMQ library, a .NET implementation of ZeroMQ.",
-    "releaseNotes": "NetStandard 1.3 supports .NET Framework 4.6 and Core 1.0 and up. Now uses NetMQ 4.0.0.1.",
+    "releaseNotes": "NetStandard 1.3 supports .NET Framework 4.6 and Core 1.0 and up. Now uses NetMQ 4.0.0.1. Adds Send method overloads.",
     "tags": [ "TCP", "Messaging", "Zero-Knowledge-Proof", "Secure-Remote-Password-Protocol" ]
   },
   "version": "1.1.1-*",
