@@ -21,6 +21,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using MessageWire.Logging;
 using MessageWire.SecureRemote;
 using NetMQ;
@@ -28,7 +29,7 @@ using NetMQ.Sockets;
 
 namespace MessageWire
 {
-    public class Host : IDisposable
+    public class Host : IHost, IDisposable
     {
         private readonly string _connectionString;
         private readonly ILog _logger;
@@ -202,6 +203,68 @@ namespace MessageWire
             }
             _sendQueue.Enqueue(message); //send by message to socket poller
         }
+
+        public void Send(Guid clientId, IEnumerable<byte[]> frames)
+        {
+            Send(clientId, frames.ToList());
+        }
+
+        public void Send(Guid clientId, byte[] frame)
+        {
+            Send(clientId, new[] { frame });
+        }
+
+        public void Send(Guid clientId, List<string> frames)
+        {
+            Send(clientId, frames, Encoding.UTF8);
+        }
+
+        public void Send(Guid clientId, IEnumerable<string> frames)
+        {
+            Send(clientId, frames, Encoding.UTF8);
+        }
+
+        public void Send(Guid clientId, params string[] frames)
+        {
+            Send(clientId, Encoding.UTF8, frames);
+        }
+
+        public void Send(Guid clientId, string frame)
+        {
+            Send(clientId, frame, Encoding.UTF8);
+        }
+
+        public void Send(Guid clientId, List<string> frames, Encoding encoding)
+        {
+            Send(clientId, (from n in frames
+                  select n == null
+                    ? (byte[])null
+                    : encoding.GetBytes(n)).ToList());
+        }
+
+        public void Send(Guid clientId, IEnumerable<string> frames, Encoding encoding)
+        {
+            Send(clientId, (from n in frames
+                  select n == null
+                    ? (byte[])null
+                    : encoding.GetBytes(n)).ToList());
+        }
+
+        public void Send(Guid clientId, Encoding encoding, params string[] frames)
+        {
+            Send(clientId, (from n in frames
+                  select n == null
+                    ? (byte[])null
+                    : encoding.GetBytes(n)).ToList());
+        }
+
+        public void Send(Guid clientId, string frame, Encoding encoding)
+        {
+            Send(clientId, new[] { frame == null
+                    ? (byte[])null
+                    : encoding.GetBytes(frame) });
+        }
+
 
         //occurs on socket polling thread to assure sending and receiving on same thread
         private void SendQueue_ReceiveReady(object sender, NetMQQueueEventArgs<NetMQMessage> e)

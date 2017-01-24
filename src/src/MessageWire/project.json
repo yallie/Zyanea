@@ -13,7 +13,7 @@
     "releaseNotes": "NetStandard 1.3 supports .NET Framework 4.6 and Core 1.0 and up. Now uses NetMQ 4.0.0.1.",
     "tags": [ "TCP", "Messaging", "Zero-Knowledge-Proof", "Secure-Remote-Password-Protocol" ]
   },
-  "version": "1.1.0-*",
+  "version": "1.1.1-*",
 
   "dependencies": {
     "NetMQ": "4.0.0.1",

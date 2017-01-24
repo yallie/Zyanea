@@ -21,6 +21,7 @@ using NetMQ;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace MessageWire
 {
@@ -32,6 +33,35 @@ namespace MessageWire
 
     internal static class MessageExtensions
     {
+        public static List<string> ConvertToStrings(this Message msg, bool convertEncodingErrorToNull = true)
+        {
+            return msg.ConvertToStrings(Encoding.UTF8, convertEncodingErrorToNull);
+        }
+
+        public static List<string> ConvertToStrings(this Message msg, Encoding encoding, bool convertEncodingErrorToNull = true)
+        {
+            var list = new List<string>();
+            if (msg.Frames == null || msg.Frames.Count == 0) return list;
+            foreach (var frame in msg.Frames)
+            {
+                try
+                {
+                    if (frame == null)
+                        list.Add((string)null);
+                    else
+                        list.Add(encoding.GetString(frame));
+                }
+                catch (Exception e)
+                {
+                    if (convertEncodingErrorToNull)
+                        list.Add((string)null);
+                    else
+                        list.Add($"##EncodingError-Bytes({frame.Length})-{e.Message}-##");
+                }
+            }
+            return list;
+        }
+
         public static Message ToMessageWithoutClientFrame(this NetMQMessage msg, Guid clientId)
         {
             if (msg == null || msg.FrameCount == 0) return null;

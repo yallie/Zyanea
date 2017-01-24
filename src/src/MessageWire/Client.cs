@@ -20,6 +20,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using MessageWire.Logging;
 using MessageWire.SecureRemote;
@@ -28,7 +29,7 @@ using NetMQ.Sockets;
 
 namespace MessageWire
 {
-    public class Client : IDisposable
+    public class Client : IClient, IDisposable
     {
         private readonly string _identity;
         private readonly string _identityKey;
@@ -262,6 +263,68 @@ namespace MessageWire
             }
             _sendQueue.Enqueue(frames);
         }
+
+        public void Send(IEnumerable<byte[]> frames)
+        {
+            Send(frames.ToList());
+        }
+
+        public void Send(byte[] frame)
+        {
+            Send(new[] { frame });
+        }
+
+        public void Send(List<string> frames)
+        {
+            Send(frames, Encoding.UTF8);
+        }
+
+        public void Send(IEnumerable<string> frames)
+        {
+            Send(frames, Encoding.UTF8);
+        }
+
+        public void Send(params string[] frames)
+        {
+            Send(Encoding.UTF8, frames);
+        }
+
+        public void Send(string frame)
+        {
+            Send(frame, Encoding.UTF8);
+        }
+
+        public void Send(List<string> frames, Encoding encoding)
+        {
+            Send((from n in frames
+                  select n == null
+                    ? (byte[])null
+                    : encoding.GetBytes(n)).ToList());
+        }
+
+        public void Send(IEnumerable<string> frames, Encoding encoding)
+        {
+            Send((from n in frames
+                  select n == null
+                    ? (byte[])null
+                    : encoding.GetBytes(n)).ToList());
+        }
+
+        public void Send(Encoding encoding, params string[] frames)
+        {
+            Send((from n in frames
+                  select n == null
+                    ? (byte[])null
+                    : encoding.GetBytes(n)).ToList());
+        }
+
+        public void Send(string frame, Encoding encoding)
+        {
+            Send(new[] { frame == null
+                    ? (byte[])null
+                    : encoding.GetBytes(frame) });
+        }
+
 
         //Executes on same poller thread as dealer socket, so we can send directly
         private void SendQueue_ReceiveReady(object sender, NetMQQueueEventArgs<List<byte[]>> e)
