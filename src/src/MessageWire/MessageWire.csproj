@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>MessageWire is an enhanced Secure Remote Password Protocol wrapper for a NetMQ Dealer socket (client) Router socket (server) combination to enable secure messaging.</Description>
+    <AssemblyTitle>MessageWire</AssemblyTitle>
+    <VersionPrefix>1.1.1</VersionPrefix>
+    <Authors>Tyler Jensen</Authors>
+    <TargetFramework>netstandard1.3</TargetFramework>
+    <AssemblyName>MessageWire</AssemblyName>
+    <PackageId>MessageWire</PackageId>
+    <PackageTags>TCP;Messaging;Zero-Knowledge-Proof;Secure-Remote-Password-Protocol</PackageTags>
+    <PackageReleaseNotes>NetStandard 1.3 supports .NET Framework 4.6 and Core 1.0 and up. Now uses NetMQ 4.0.0.1. Adds Send method overloads.</PackageReleaseNotes>
+    <PackageIconUrl>http://tsjensen.com/blog/image.axd?picture=MessageWireLogo.png</PackageIconUrl>
+    <PackageProjectUrl>https://github.com/tylerjensen/MessageWire</PackageProjectUrl>
+    <PackageLicenseUrl>https://opensource.org/licenses/MIT</PackageLicenseUrl>
+    <NetStandardImplicitPackageVersion>1.6.1</NetStandardImplicitPackageVersion>
+    <PackageTargetFallback>$(PackageTargetFallback);dnxcore50</PackageTargetFallback>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetMQ" Version="4.0.0.1" />
+  </ItemGroup>
+
+</Project>
