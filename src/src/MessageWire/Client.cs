@@ -1,26 +1,25 @@
-﻿/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+﻿/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  *  MessageWire - https://github.com/tylerjensen/MessageWire
- *  
+ *
  * The MIT License (MIT)
  * Copyright (C) 2016-2017 Tyler Jensen
- * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
- * documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
- * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+ * documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
  * and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED 
- * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL 
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF 
- * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+ * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+ * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using MessageWire.Logging;
 using MessageWire.SecureRemote;
@@ -57,20 +56,20 @@ namespace MessageWire
         /// Client constructor.
         /// </summary>
         /// <param name="connectionString">Valid NetMQ client socket connection string.</param>
-        /// <param name="identity">Client identifier passed to the server in Zero Knowledge authentication. 
+        /// <param name="identity">Client identifier passed to the server in Zero Knowledge authentication.
         ///                  Null for unsecured hosts.</param>
-        /// <param name="identityKey">Secret key used by NOT passed to the server in Zero Knowledge authentication 
-        ///                   but used in memory to validate authentication of the server. Null for 
+        /// <param name="identityKey">Secret key used by NOT passed to the server in Zero Knowledge authentication
+        ///                   but used in memory to validate authentication of the server. Null for
         ///                   unsecured hosts</param>
         /// <param name="logger">ILogger implementation for logging operations. Null is replaced with NullLogger.</param>
         /// <param name="stats">IStats implementation for logging perf metrics. Null is replaced with NullStats.</param>
-        /// <param name="heartBeatIntervalMs">Number of milliseconds between client sending heartbeat message to the server. 
+        /// <param name="heartBeatIntervalMs">Number of milliseconds between client sending heartbeat message to the server.
         /// Default 30,000 (30 seconds). Min is 1000 (1 second) and max is 600,000 (10 mins).</param>
-        /// <param name="maxSkippedHeartBeatReplies">Maximum heartbeat intervals skipped without a heartbeat reply 
+        /// <param name="maxSkippedHeartBeatReplies">Maximum heartbeat intervals skipped without a heartbeat reply
         /// from the server before the client begins throwing on Send and returns false for the IsHostAlive property.
         /// Default is 3. Min is 1 and max is 10.</param>
-        public Client(string connectionString, string identity = null, string identityKey = null, 
-            ILog logger = null, IStats stats = null, 
+        public Client(string connectionString, string identity = null, string identityKey = null,
+            ILog logger = null, IStats stats = null,
             int heartBeatIntervalMs = 30000, int maxSkippedHeartBeatReplies = 3)
         {
             _identity = identity;
@@ -79,8 +78,8 @@ namespace MessageWire
             _logger = logger ?? new NullLogger();
             _stats = stats ?? new NullStats();
 
-            _heartBeatMs = (heartBeatIntervalMs < 1000) 
-                ? 1000 
+            _heartBeatMs = (heartBeatIntervalMs < 1000)
+                ? 1000
                 : (heartBeatIntervalMs > 600000) ? 600000 : heartBeatIntervalMs;
 
             _maxSkippedHeartBeatReplies = (maxSkippedHeartBeatReplies < 1)
@@ -123,12 +122,12 @@ namespace MessageWire
             //check for last heartbeat from server, set to throw on new send if exceeds certain threshold
             if (null !=_session && null != _session.Crypto)
             {
-                if ((DateTime.UtcNow - _session.LastHeartBeat).TotalMilliseconds 
+                if ((DateTime.UtcNow - _session.LastHeartBeat).TotalMilliseconds
                     > _heartBeatMs * _maxSkippedHeartBeatReplies)
                 {
                     _throwOnSend = true; //do not allow send
                     _hostDead = true;
-                    _logger.Debug("Heartbeat from server skipped {0} time. Host is dead.", 
+                    _logger.Debug("Heartbeat from server skipped {0} time. Host is dead.",
                         _maxSkippedHeartBeatReplies);
                 }
                 else
@@ -189,9 +188,9 @@ namespace MessageWire
         private EventHandler<ProtocolFailureEventArgs> _ecryptionProtocolFailedEvent;
 
         /// <summary>
-        /// This event occurs when a message has been received. 
+        /// This event occurs when a message has been received.
         /// </summary>
-        /// <remarks>This handler is thread safe occuring on a thread other 
+        /// <remarks>This handler is thread safe occuring on a thread other
         /// than the thread sending and receiving messages over the wire.</remarks>
         public event EventHandler<MessageEventArgs> MessageReceived {
             add {
@@ -203,9 +202,9 @@ namespace MessageWire
         }
 
         /// <summary>
-        /// This event occurs when an invalid protocol message has been received. 
+        /// This event occurs when an invalid protocol message has been received.
         /// </summary>
-        /// <remarks>This handler is thread safe occuring on a thread other 
+        /// <remarks>This handler is thread safe occuring on a thread other
         /// than the thread sending and receiving messages over the wire.</remarks>
         public event EventHandler<MessageEventArgs> InvalidMessageReceived {
             add {
@@ -218,9 +217,9 @@ namespace MessageWire
 
         /// <summary>
         /// This event occurs when the client has established a secure connection and
-        /// messages may be sent without throwing an operation cancelled exception. 
+        /// messages may be sent without throwing an operation cancelled exception.
         /// </summary>
-        /// <remarks>This handler is thread safe occuring on a thread other 
+        /// <remarks>This handler is thread safe occuring on a thread other
         /// than the thread sending and receiving messages over the wire.</remarks>
         public event EventHandler<EventArgs> EcryptionProtocolEstablished {
             add {
@@ -233,9 +232,9 @@ namespace MessageWire
 
         /// <summary>
         /// This event occurs when the client failes to establish a secure connection and
-        /// messages may be sent without throwing an operation cancelled exception. 
+        /// messages may be sent without throwing an operation cancelled exception.
         /// </summary>
-        /// <remarks>This handler is thread safe occuring on a thread other 
+        /// <remarks>This handler is thread safe occuring on a thread other
         /// than the thread sending and receiving messages over the wire.</remarks>
         public event EventHandler<ProtocolFailureEventArgs> EcryptionProtocolFailed {
             add {
@@ -263,68 +262,6 @@ namespace MessageWire
             }
             _sendQueue.Enqueue(frames);
         }
-
-        public void Send(IEnumerable<byte[]> frames)
-        {
-            Send(frames.ToList());
-        }
-
-        public void Send(byte[] frame)
-        {
-            Send(new[] { frame });
-        }
-
-        public void Send(List<string> frames)
-        {
-            Send(frames, Encoding.UTF8);
-        }
-
-        public void Send(IEnumerable<string> frames)
-        {
-            Send(frames, Encoding.UTF8);
-        }
-
-        public void Send(params string[] frames)
-        {
-            Send(Encoding.UTF8, frames);
-        }
-
-        public void Send(string frame)
-        {
-            Send(frame, Encoding.UTF8);
-        }
-
-        public void Send(List<string> frames, Encoding encoding)
-        {
-            Send((from n in frames
-                  select n == null
-                    ? (byte[])null
-                    : encoding.GetBytes(n)).ToList());
-        }
-
-        public void Send(IEnumerable<string> frames, Encoding encoding)
-        {
-            Send((from n in frames
-                  select n == null
-                    ? (byte[])null
-                    : encoding.GetBytes(n)).ToList());
-        }
-
-        public void Send(Encoding encoding, params string[] frames)
-        {
-            Send((from n in frames
-                  select n == null
-                    ? (byte[])null
-                    : encoding.GetBytes(n)).ToList());
-        }
-
-        public void Send(string frame, Encoding encoding)
-        {
-            Send(new[] { frame == null
-                    ? (byte[])null
-                    : encoding.GetBytes(frame) });
-        }
-
 
         //Executes on same poller thread as dealer socket, so we can send directly
         private void SendQueue_ReceiveReady(object sender, NetMQQueueEventArgs<List<byte[]>> e)
@@ -405,7 +342,7 @@ namespace MessageWire
                     frames[i] = _session.Crypto.Decrypt(frames[i]);
                 }
             }
-            _logger.Info("Message received Frame count {0}. Total length {1}.", 
+            _logger.Info("Message received Frame count {0}. Total length {1}.",
                 frames.Count, frames.Select(x => x.Length).Sum());
             _receivedEvent?.Invoke(this, new MessageEventArgs
             {
@@ -460,13 +397,13 @@ namespace MessageWire
                 }
                 else
                 {
-                    error = "Protocol proof creation failed."; 
+                    error = "Protocol proof creation failed.";
                     _logger.Fatal(error);
                     _ecryptionProtocolFailedEvent?.Invoke(this, new ProtocolFailureEventArgs { Message = error });
                 }
             }
             else if (frames[0][2] == MessageHeader.SM2)
-                
+
             {
                 if (_session.ProcessProofReply(frames)) //complete proof
                 {
@@ -506,7 +443,6 @@ namespace MessageWire
                    || frames[0][2] == MessageHeader.SF2)
                 && frames[0][3] == MessageHeader.BEL);
         }
-
 
         #region IDisposable Members
 

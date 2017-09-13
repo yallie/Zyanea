@@ -1,19 +1,19 @@
-﻿/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+﻿/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  *  MessageWire - https://github.com/tylerjensen/MessageWire
- *  
+ *
  * The MIT License (MIT)
  * Copyright (C) 2016-2017 Tyler Jensen
- * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
- * documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
- * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+ * documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
  * and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED 
- * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL 
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF 
- * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+ * TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+ * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
@@ -55,10 +55,10 @@ namespace MessageWire
         /// <param name="authRepository">External authentication repository. Null creates host with no encryption.</param>
         /// <param name="logger">ILogger implementation for logging operations. Null is replaced with NullLogger.</param>
         /// <param name="stats">IStats implementation for logging perf metrics. Null is replaced with NullStats.</param>
-        /// <param name="sessionTimeoutMins">Session timout check interval. If no heartbeats or messages 
-        /// received on a given session in this period of time, the session will be removed from memory 
+        /// <param name="sessionTimeoutMins">Session timout check interval. If no heartbeats or messages
+        /// received on a given session in this period of time, the session will be removed from memory
         /// and futher attempts from the client will fail. Default is 20 minutes. Min is 1 and Max is 3600.</param>
-        public Host(string connectionString, IKeyRepository authRepository = null, 
+        public Host(string connectionString, IKeyRepository authRepository = null,
             ILog logger = null, IStats stats = null, int sessionTimeoutMins = 20)
         {
             if (string.IsNullOrWhiteSpace(connectionString)) throw new ArgumentNullException("Connection string cannot be null.", nameof(connectionString));
@@ -130,7 +130,7 @@ namespace MessageWire
         }
 
         /// <summary>
-        /// This event occurs when a message has been received. 
+        /// This event occurs when a message has been received.
         /// </summary>
         /// <remarks>This handler will run on a different thread than the socket poller and
         /// blocking on this thread will not block sending and receiving.</remarks>
@@ -442,7 +442,6 @@ namespace MessageWire
                     || (frames[0][2] == MessageHeader.CM2 && frames.Count == 2))
                 && frames[0][3] == MessageHeader.BEL);
         }
-
 
         #region IDisposable Members
 

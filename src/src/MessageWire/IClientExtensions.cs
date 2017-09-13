@@ -17,14 +17,62 @@
  * DEALINGS IN THE SOFTWARE.
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
 namespace MessageWire
 {
-	public class Message
+	public static class IClientExtensions
 	{
-		public Guid ClientId { get; set; }
-		public List<byte[]> Frames { get; set; }
+		public static void Send(this IClient self, IEnumerable<byte[]> frames)
+		{
+			self.Send(frames.ToList());
+		}
+
+		public static void Send(this IClient self, byte[] frame)
+		{
+			self.Send(new List<byte[]> { frame });
+		}
+
+		public static void Send(this IClient self, List<string> frames)
+		{
+			self.Send(frames.AsEnumerable(), Encoding.UTF8);
+		}
+
+		public static void Send(this IClient self, IEnumerable<string> frames)
+		{
+			self.Send(frames, Encoding.UTF8);
+		}
+
+		public static void Send(this IClient self, params string[] frames)
+		{
+			self.Send(frames.AsEnumerable(), Encoding.UTF8);
+		}
+
+		public static void Send(this IClient self, string frame)
+		{
+			self.Send(Encoding.UTF8, frame);
+		}
+
+		public static void Send(this IClient self, List<string> frames, Encoding encoding)
+		{
+			self.Send(frames.AsEnumerable(), encoding);
+		}
+
+		public static void Send(this IClient self, IEnumerable<string> frames, Encoding encoding)
+		{
+			self.Send(frames.Select(n => n == null ? null : encoding.GetBytes(n)).ToList());
+		}
+
+		public static void Send(this IClient self, Encoding encoding, params string[] frames)
+		{
+			self.Send(frames.AsEnumerable(), encoding);
+		}
+
+		public static void Send(this IClient self, string frame, Encoding encoding)
+		{
+			self.Send(encoding, frame);
+		}
 	}
 }
