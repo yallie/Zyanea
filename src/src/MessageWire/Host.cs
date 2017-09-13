@@ -106,7 +106,7 @@ namespace MessageWire
         private EventHandler<MessageEventFailureArgs> _sentFailureEvent;
         private EventHandler<MessageEventArgs> _receivedEvent;
         private EventHandler<MessageEventArgs> _sentEvent;
-        private EventHandler<MessageEventArgs> _zkClientSessionEstablishedEvent;
+        private EventHandler<MessageEventArgs> _secureClientSessionEstablishedEvent;
 
         public Guid[] GetCurrentSessionKeys()
         {
@@ -163,12 +163,12 @@ namespace MessageWire
         /// </summary>
         /// <remarks>This handler will run on a different thread than the socket poller and
         /// blocking on this thread will not block sending and receiving.</remarks>
-        public event EventHandler<MessageEventArgs> ZkClientSessionEstablishedEvent {
+        public event EventHandler<MessageEventArgs> SecureClientSessionEstablished {
             add {
-                _zkClientSessionEstablishedEvent += value;
+                _secureClientSessionEstablishedEvent += value;
             }
             remove {
-                _zkClientSessionEstablishedEvent -= value;
+                _secureClientSessionEstablishedEvent -= value;
             }
         }
 
@@ -402,7 +402,7 @@ namespace MessageWire
             //if second reply and success, raise event, new client session?
             if (responseFrames[0].IsEqualTo(MessageHeader.ProofResponseSuccess))
             {
-                _zkClientSessionEstablishedEvent?.Invoke(this, new MessageEventArgs
+                _secureClientSessionEstablishedEvent?.Invoke(this, new MessageEventArgs
                 {
                     Message = new Message
                     {

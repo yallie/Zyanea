@@ -57,10 +57,9 @@ namespace MessageWire
         /// </summary>
         /// <param name="connectionString">Valid NetMQ client socket connection string.</param>
         /// <param name="identity">Client identifier passed to the server in Zero Knowledge authentication.
-        ///                  Null for unsecured hosts.</param>
+        /// Null for unsecured hosts.</param>
         /// <param name="identityKey">Secret key used by NOT passed to the server in Zero Knowledge authentication
-        ///                   but used in memory to validate authentication of the server. Null for
-        ///                   unsecured hosts</param>
+        /// but used in memory to validate authentication of the server. Null for unsecured hosts</param>
         /// <param name="logger">ILogger implementation for logging operations. Null is replaced with NullLogger.</param>
         /// <param name="stats">IStats implementation for logging perf metrics. Null is replaced with NullStats.</param>
         /// <param name="heartBeatIntervalMs">Number of milliseconds between client sending heartbeat message to the server.
