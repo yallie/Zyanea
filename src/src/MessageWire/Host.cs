@@ -105,7 +105,6 @@ namespace MessageWire
 
         private EventHandler<MessageEventFailureArgs> _sentFailureEvent;
         private EventHandler<MessageEventArgs> _receivedEvent;
-        private EventHandler<MessageEventArgs> _sentEvent;
         private EventHandler<MessageEventArgs> _secureClientSessionEstablishedEvent;
 
         public Guid[] GetCurrentSessionKeys()
