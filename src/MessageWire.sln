@@ -12,9 +12,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".docs", ".docs", "{2A8A94FC
 		..\README.md = ..\README.md
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MessageWire", "src\MessageWire\MessageWire.csproj", "{42CEE435-2735-4E99-AF3F-FBB18E55892E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MessageWire", "MessageWire\MessageWire.csproj", "{42CEE435-2735-4E99-AF3F-FBB18E55892E}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MessageWire.Tests", "src\MessageWire.Tests\MessageWire.Tests.csproj", "{FADEA2FC-B1BC-4218-A64C-C795FE4EDB79}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MessageWire.Tests", "MessageWire.Tests\MessageWire.Tests.csproj", "{FADEA2FC-B1BC-4218-A64C-C795FE4EDB79}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
