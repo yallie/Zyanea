@@ -1,6 +1,7 @@
 ﻿using System;
 using MessageWire;
 using Xunit;
+using ZyanPoC.Tests.Sync;
 
 namespace ZyanPoC.Tests
 {
@@ -16,13 +17,28 @@ namespace ZyanPoC.Tests
 			Wire.Cleanup();
 		}
 
-		const string BaseUrl = "tcp://127.0.0.1:5800";
+		const string ServerUrl = "tcp://127.0.0.1:5800";
 
 		[Fact]
-		public void BasicHostConnectionTest()
+		public void ZyanServerCanRegisterAndResolveComponents()
 		{
-			using (var host = new ZyanHost(BaseUrl))
+			using (var server = new ZyanServer())
 			{
+				server.Register<ISampleSyncService, SampleSyncService>();
+				var component = server.Resolve<ISampleSyncService>();
+
+				Assert.NotNull(component);
+				Assert.IsType<SampleSyncService>(component);
+			}
+		}
+
+		[Fact]
+		public void ZyanServerCanBeConnectedTo()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			using (var client = new ZyanClient(ServerUrl))
+			{
+				Assert.True(client.IsConnected);
 			}
 		}
 	}

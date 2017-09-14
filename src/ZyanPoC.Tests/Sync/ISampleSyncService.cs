@@ -8,6 +8,7 @@ namespace ZyanPoC.Tests.Sync
 	{
 		void Void();
 		string GetVersion();
-		DateTime GetDate(int year, int month, int date);
+		DateTime GetDate(int year, int month, int day);
+		void ThrowException();
 	}
 }
