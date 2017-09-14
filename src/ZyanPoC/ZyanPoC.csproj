@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>ZyanPoC is a proof-of-concept version of Zyan over NetMQ using MessageWire Zero-Knowledge Proof layer.</Description>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MessageWire\MessageWire.csproj" />
+  </ItemGroup>
+
+</Project>

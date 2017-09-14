@@ -5,7 +5,7 @@
     <AssemblyTitle>MessageWire</AssemblyTitle>
     <VersionPrefix>1.1.1</VersionPrefix>
     <Authors>Tyler Jensen</Authors>
-    <TargetFramework>netstandard1.3</TargetFramework>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>MessageWire</AssemblyName>
     <PackageId>MessageWire</PackageId>
     <PackageTags>TCP;Messaging;Zero-Knowledge-Proof;Secure-Remote-Password-Protocol</PackageTags>
@@ -13,7 +13,6 @@
     <PackageIconUrl>http://tsjensen.com/blog/image.axd?picture=MessageWireLogo.png</PackageIconUrl>
     <PackageProjectUrl>https://github.com/tylerjensen/MessageWire</PackageProjectUrl>
     <PackageLicenseUrl>https://opensource.org/licenses/MIT</PackageLicenseUrl>
-    <NetStandardImplicitPackageVersion>1.6.1</NetStandardImplicitPackageVersion>
     <PackageTargetFallback>$(PackageTargetFallback);dnxcore50</PackageTargetFallback>
     <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
