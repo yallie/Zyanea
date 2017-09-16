@@ -6,3 +6,8 @@ before_build:
 - cmd: nuget restore src
 build:
   verbosity: minimal
+test_script:
+- cmd: >-
+    dotnet test src/MessageWire.Tests
+
+    dotnet test src/ZyanPoc.Tests
