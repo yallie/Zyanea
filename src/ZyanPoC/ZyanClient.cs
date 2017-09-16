@@ -41,5 +41,10 @@ namespace ZyanPoC
 			var interceptor = new AsyncInterceptor(this);
 			return ProxyGenerator.CreateInterfaceProxyWithTargetInterface<IService>(null, interceptor);
 		}
+
+		internal void SendMessage(RequestMessage zyanMessage)
+		{
+			// TODO: serialize and send the message
+		}
 	}
 }

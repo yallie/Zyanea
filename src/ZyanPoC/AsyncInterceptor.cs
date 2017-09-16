@@ -16,8 +16,11 @@ namespace ZyanPoC
 
 		public void InterceptSynchronous(IInvocation invocation)
 		{
-			// TODO: invoke the remote method
-			//throw new NotImplementedException();
+			// TODO: handle optional call interception
+			// send the method invocation message
+			Client.SendMessage(new RequestMessage(invocation));
+
+			// TODO: wait for the reply message
 		}
 
 		public void InterceptAsynchronous(IInvocation invocation)
