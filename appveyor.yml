@@ -1,6 +1,8 @@
 version: 1.0.{build}
 image: Visual Studio 2017
+install:
+- cmd: appveyor downloadfile https://dist.nuget.org/win-x86-commandline/v4.3.0/nuget.exe
 before_build:
 - cmd: nuget restore src
 build:
-  verbosity: normal
+  verbosity: minimal
