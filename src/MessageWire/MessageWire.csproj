@@ -13,7 +13,6 @@
     <PackageIconUrl>http://tsjensen.com/blog/image.axd?picture=MessageWireLogo.png</PackageIconUrl>
     <PackageProjectUrl>https://github.com/tylerjensen/MessageWire</PackageProjectUrl>
     <PackageLicenseUrl>https://opensource.org/licenses/MIT</PackageLicenseUrl>
-    <PackageTargetFallback>$(PackageTargetFallback);dnxcore50</PackageTargetFallback>
     <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
