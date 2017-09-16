@@ -6,7 +6,7 @@ using Castle.DynamicProxy;
 
 namespace ZyanPoC
 {
-	internal class RequestMessage
+	public class RequestMessage
 	{
 		public RequestMessage(IInvocation invocation)
 		{

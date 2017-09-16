@@ -18,9 +18,11 @@ namespace ZyanPoC
 		{
 			// TODO: handle optional call interception
 			// send the method invocation message
-			Client.SendMessage(new RequestMessage(invocation));
+			var msg = new RequestMessage(invocation);
+			Client.SendMessage(msg);
 
-			// TODO: wait for the reply message
+			// wait for the reply message
+			invocation.ReturnValue = Client.GetResult(msg.MessageId);
 		}
 
 		public void InterceptAsynchronous(IInvocation invocation)
