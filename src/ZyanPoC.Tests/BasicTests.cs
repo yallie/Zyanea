@@ -41,5 +41,42 @@ namespace ZyanPoC.Tests
 				Assert.True(client.IsConnected);
 			}
 		}
+
+		[Fact]
+		public void ZyanClientDoesntImmediatelyConnect()
+		{
+			// Assert.DoesNotThrow
+			using (var client = new ZyanClient(ServerUrl))
+			{
+			}
+		}
+
+		[Fact]
+		public void ZyanClientCanCreateProxies()
+		{
+			// Assert.DoesNotThrow
+			using (var client = new ZyanClient(ServerUrl))
+			{
+				var proxy = client.CreateProxy<ISampleSyncService>();
+				Assert.NotNull(proxy);
+			}
+		}
+
+		[Fact]
+		public void ZyanClientCanCallVoidMethodSynchronously()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleSyncService, SampleSyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleSyncService>();
+
+					// Assert.DoesNotThrow
+					proxy.Void();
+				}
+			}
+		}
 	}
 }
