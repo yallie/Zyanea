@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading.Tasks;
 using Castle.DynamicProxy;
 
 namespace ZyanPoC
@@ -24,13 +25,24 @@ namespace ZyanPoC
 			var msg = new RequestMessage(invocation, ComponentType);
 			Client.SendMessage(msg);
 
-			// wait for the reply message
-			invocation.ReturnValue = Client.GetResult(msg.MessageId);
+			// wait for the reply message synchronously
+			invocation.ReturnValue = Client.GetSyncResult(msg.MessageId);
 		}
 
 		public void InterceptAsynchronous(IInvocation invocation)
 		{
-			throw new NotImplementedException();
+			invocation.ReturnValue = InternalInterceptAsynchronous(invocation);
+		}
+
+		private async Task InternalInterceptAsynchronous(IInvocation invocation)
+		{
+			// TODO: handle optional call interception
+			// send the method invocation message
+			var msg = new RequestMessage(invocation, ComponentType);
+			Client.SendMessage(msg);
+
+			// wait for the reply message asynchronously
+			await Client.GetAsyncTask(msg.MessageId);
 		}
 
 		public void InterceptAsynchronous<TResult>(IInvocation invocation)

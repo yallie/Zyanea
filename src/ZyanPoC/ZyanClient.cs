@@ -87,13 +87,40 @@ namespace ZyanPoC
 			}
 		}
 
-		internal object GetResult(Guid messageId)
+		internal object GetSyncResult(Guid messageId)
 		{
 			if (PendingMessages.TryGetValue(messageId, out var tcs))
 			{
 				try
 				{
 					return tcs.Task.Result;
+				}
+				catch (AggregateException ex)
+				{
+					// skip extra AggregateException produced by the TaskCompletionSource
+					if (ex.InnerExceptions.Count == 1 && ex.InnerException != null)
+					{
+						// preserve the original stack trace
+						var info = ExceptionDispatchInfo.Capture(ex.InnerException);
+						info.Throw();
+					}
+
+					// more than one inner exception, throw as is
+					throw;
+				}
+			}
+
+			throw new InvalidOperationException($"Message {messageId} already handled");
+		}
+
+		internal async Task GetAsyncTask(Guid messageId)
+		{
+			if (PendingMessages.TryGetValue(messageId, out var tcs))
+			{
+				try
+				{
+					await tcs.Task;
+					return;
 				}
 				catch (AggregateException ex)
 				{

@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Threading.Tasks;
 using DryIoc;
 using MessageWire;
 using Xunit;
+using ZyanPoC.Tests.Async;
 using ZyanPoC.Tests.Sync;
 
 namespace ZyanPoC.Tests
@@ -153,6 +155,43 @@ namespace ZyanPoC.Tests
 					});
 
 					Assert.Equal(nameof(ISampleSyncService), ex.Message);
+				}
+			}
+		}
+
+		[Fact]
+		public async Task ZyanClientCanCallAsyncTaskMethod()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleAsyncService, SampleAsyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleAsyncService>();
+
+					// Assert.DoesNotThrow
+					await proxy.PerformShortOperation();
+				}
+			}
+		}
+
+		[Fact]
+		public async Task ZyanClientCanCallAsyncTaskMethodAndItsActuallyExecuted()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleAsyncService, SampleAsyncService>(Reuse.Singleton);
+				var async = server.Resolve<ISampleAsyncService>() as SampleAsyncService;
+				Assert.False(async.ShortOperationPerformed);
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleAsyncService>();
+
+					// Assert.DoesNotThrow
+					await proxy.PerformShortOperation();
+					Assert.True(async.ShortOperationPerformed);
 				}
 			}
 		}
