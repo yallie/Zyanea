@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Reflection;
 using DryIoc;
 using DryIoc.MefAttributedModel;
 using Hyperion;
@@ -65,6 +66,13 @@ namespace ZyanPoC
 				}
 				catch (Exception ex)
 				{
+					// skip the useless TargetInvocationException
+					// also, it's not supported by the serializer
+					if (ex is TargetInvocationException)
+					{
+						ex = ex.InnerException;
+					}
+
 					// wrap the exception to send back to the client
 					replyMessage.Exception = ex;
 				}

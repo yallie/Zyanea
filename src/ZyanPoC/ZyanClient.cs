@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading.Tasks;
 using Castle.DynamicProxy;
@@ -90,7 +91,23 @@ namespace ZyanPoC
 		{
 			if (PendingMessages.TryGetValue(messageId, out var tcs))
 			{
-				return tcs.Task.Result;
+				try
+				{
+					return tcs.Task.Result;
+				}
+				catch (AggregateException ex)
+				{
+					// skip extra AggregateException produced by the TaskCompletionSource
+					if (ex.InnerExceptions.Count == 1 && ex.InnerException != null)
+					{
+						// preserve the original stack trace
+						var info = ExceptionDispatchInfo.Capture(ex.InnerException);
+						info.Throw();
+					}
+
+					// more than one inner exception, throw as is
+					throw;
+				}
 			}
 
 			throw new InvalidOperationException($"Message {messageId} already handled");

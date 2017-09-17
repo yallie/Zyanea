@@ -136,7 +136,7 @@ namespace ZyanPoC.Tests
 			}
 		}
 
-		// ignore: Hyperion cannot deserialize an exception
+		[Fact]
 		public void ZyanClientCanCallMethodSynchronouslyAndCatchTheException()
 		{
 			using (var server = new ZyanServer(ServerUrl))
