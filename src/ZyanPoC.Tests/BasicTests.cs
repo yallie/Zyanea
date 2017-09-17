@@ -1,4 +1,5 @@
 ﻿using System;
+using DryIoc;
 using MessageWire;
 using Xunit;
 using ZyanPoC.Tests.Sync;
@@ -75,6 +76,26 @@ namespace ZyanPoC.Tests
 
 					// Assert.DoesNotThrow
 					proxy.Void();
+				}
+			}
+		}
+
+		[Fact]
+		public void ZyanClientCanCallVoidMethodSynchronouslyAndItsActuallyExecutedOnServer()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleSyncService, SampleSyncService>(Reuse.Singleton);
+				var sync = server.Resolve<ISampleSyncService>() as SampleSyncService;
+				Assert.False(sync.VoidExecuted);
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleSyncService>();
+
+					// Assert.DoesNotThrow
+					proxy.Void();
+					Assert.True(sync.VoidExecuted);
 				}
 			}
 		}

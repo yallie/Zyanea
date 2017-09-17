@@ -43,7 +43,7 @@ namespace ZyanPoC
 		public IHost Host { get; private set; }
 
 		public IContainer Container { get; } =
-			new Container().WithMef();
+			new Container().WithMef().With(r => r.WithDefaultReuse(Reuse.Transient));
 
 		private Serializer Serializer { get; } =
 			new Serializer(new SerializerOptions(preserveObjectReferences: true));
@@ -54,7 +54,12 @@ namespace ZyanPoC
 			{
 				// deserialize the request message
 				var requestMessage = Serializer.Deserialize<RequestMessage>(ms);
+
+				// invoke the request message and get the result
+				var component = Container.Resolve(requestMessage.ComponentType);
+				var result = requestMessage.Method.Invoke(component, requestMessage.Arguments);
 				var replyMessage = new ReplyMessage(requestMessage);
+				replyMessage.Result = result;
 
 				// serialize the reply message
 				ms.SetLength(0);

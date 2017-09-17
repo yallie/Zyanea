@@ -8,10 +8,10 @@ namespace ZyanPoC
 {
 	public class RequestMessage
 	{
-		public RequestMessage(IInvocation invocation)
+		public RequestMessage(IInvocation invocation, Type componentType)
 		{
 			MessageId = Guid.NewGuid();
-			ComponentType = invocation.TargetType;
+			ComponentType = componentType;
 			Method = invocation.Method;
 			GenericArguments = invocation.GenericArguments;
 			Arguments = invocation.Arguments;

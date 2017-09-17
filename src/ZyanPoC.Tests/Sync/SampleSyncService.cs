@@ -16,12 +16,14 @@ namespace ZyanPoC.Tests.Sync
 
 		public void Void()
 		{
-			// do nothing
+			VoidExecuted = true;
 		}
+
+		public bool VoidExecuted { get; private set; }
 
 		public void ThrowException()
 		{
-			throw new NotImplementedException();
+			throw new NotImplementedException(nameof(ISampleSyncService));
 		}
 	}
 }

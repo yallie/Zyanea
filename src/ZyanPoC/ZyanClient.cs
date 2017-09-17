@@ -47,7 +47,7 @@ namespace ZyanPoC
 		public IService CreateProxy<IService>()
 			where IService: class
 		{
-			var interceptor = new AsyncInterceptor(this);
+			var interceptor = new AsyncInterceptor(this, typeof(IService));
 			return ProxyGenerator.CreateInterfaceProxyWithTargetInterface<IService>(null, interceptor);
 		}
 
