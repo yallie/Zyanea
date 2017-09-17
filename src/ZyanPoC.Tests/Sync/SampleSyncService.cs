@@ -4,6 +4,8 @@ namespace ZyanPoC.Tests.Sync
 {
 	internal class SampleSyncService : ISampleSyncService
 	{
+		public const string Version = "0.0.1 alpha";
+
 		public DateTime GetDate(int year, int month, int day)
 		{
 			return new DateTime(year, month, day);
@@ -11,7 +13,7 @@ namespace ZyanPoC.Tests.Sync
 
 		public string GetVersion()
 		{
-			return "0.0.1 alpha";
+			return Version;
 		}
 
 		public void Void()

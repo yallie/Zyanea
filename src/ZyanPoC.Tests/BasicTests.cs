@@ -99,5 +99,62 @@ namespace ZyanPoC.Tests
 				}
 			}
 		}
+
+		[Fact]
+		public void ZyanClientCanCallMethodSynchronouslyAndGetTheStringResult()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleSyncService, SampleSyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleSyncService>();
+
+					// Assert.DoesNotThrow
+					var result = proxy.GetVersion();
+					Assert.Equal(SampleSyncService.Version, result);
+				}
+			}
+		}
+
+		[Fact]
+		public void ZyanClientCanCallMethodSynchronouslyAndGetTheDateResult()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleSyncService, SampleSyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleSyncService>();
+
+					// Assert.DoesNotThrow
+					var result = proxy.GetDate(2017, 09, 17);
+					Assert.Equal(new DateTime(2017, 09, 17), result);
+				}
+			}
+		}
+
+		// ignore: Hyperion cannot deserialize an exception
+		public void ZyanClientCanCallMethodSynchronouslyAndCatchTheException()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleSyncService, SampleSyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleSyncService>();
+
+					var ex = Assert.Throws<NotImplementedException>(() =>
+					{
+						proxy.ThrowException();
+					});
+
+					Assert.Equal(nameof(ISampleSyncService), ex.Message);
+				}
+			}
+		}
 	}
 }

@@ -52,22 +52,32 @@ namespace ZyanPoC
 		{
 			using (var ms = new MemoryStream(e.Message.Frames[0]))
 			{
-				// deserialize the request message
+				// deserialize the request message and prepare the reply
 				var requestMessage = Serializer.Deserialize<RequestMessage>(ms);
-
-				// invoke the request message and get the result
-				var component = Container.Resolve(requestMessage.ComponentType);
-				var result = requestMessage.Method.Invoke(component, requestMessage.Arguments);
 				var replyMessage = new ReplyMessage(requestMessage);
-				replyMessage.Result = result;
 
-				// serialize the reply message
-				ms.SetLength(0);
-				Serializer.Serialize(replyMessage, ms);
-				var serialized = ms.ToArray();
+				try
+				{
+					// invoke the request message and get the result
+					var component = Container.Resolve(requestMessage.ComponentType);
+					var result = requestMessage.Method.Invoke(component, requestMessage.Arguments);
+					replyMessage.Result = result;
+				}
+				catch (Exception ex)
+				{
+					// wrap the exception to send back to the client
+					replyMessage.Exception = ex;
+				}
+				finally
+				{
+					// serialize the reply message
+					ms.SetLength(0);
+					Serializer.Serialize(replyMessage, ms);
+					var serialized = ms.ToArray();
 
-				// send the reply
-				Host.Send(e.Message.ClientId, serialized);
+					// send the reply
+					Host.Send(e.Message.ClientId, serialized);
+				}
 			}
 		}
 	}
