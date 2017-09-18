@@ -27,5 +27,7 @@ namespace ZyanPoC.Tests.Sync
 		{
 			throw new NotImplementedException(nameof(ISampleSyncService));
 		}
+
+		public string Platform { get; set; }
 	}
 }

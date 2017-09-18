@@ -160,6 +160,27 @@ namespace ZyanPoC.Tests
 		}
 
 		[Fact]
+		public void ZyanClientCanAssignRemotePropertySynchronously()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				// preserving property value between calls requires the Singleton reuse
+				server.Register<ISampleSyncService, SampleSyncService>(Reuse.Singleton);
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleSyncService>();
+
+					// Assert.DoesNotThrow
+					proxy.Platform = nameof(ZyanClientCanAssignRemotePropertySynchronously);
+					var result = proxy.Platform;
+
+					Assert.Equal(nameof(ZyanClientCanAssignRemotePropertySynchronously), result);
+				}
+			}
+		}
+
+		[Fact]
 		public async Task ZyanClientCanCallAsyncTaskMethod()
 		{
 			using (var server = new ZyanServer(ServerUrl))
@@ -266,6 +287,28 @@ namespace ZyanPoC.Tests
 					// Assert.DoesNotThrow
 					var result = await proxy.Construct(2017, 09, 19);
 					Assert.Equal(new DateTime(2017, 09, 19), result);
+				}
+			}
+		}
+
+		[Fact]
+		public async Task ZyanClientCanReadRemotePropertyAsynchronously()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleAsyncService, SampleAsyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleAsyncService>();
+
+					// Assert.DoesNotThrow
+					var nowBefore = DateTimeOffset.Now;
+					var nowRemote = await proxy.Now;
+					var nowAfter = DateTimeOffset.Now;
+
+					Assert.True(nowBefore <= nowRemote);
+					Assert.True(nowRemote <= nowAfter);
 				}
 			}
 		}

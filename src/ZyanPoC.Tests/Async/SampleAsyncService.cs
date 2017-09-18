@@ -38,8 +38,16 @@ namespace ZyanPoC.Tests.Async
 
 		public async Task<DateTime> Construct(int y, int m, int d)
 		{
-			await Task.Delay(10);
+			await Task.Delay(1);
 			return new DateTime(y, m, d);
+		}
+
+		public Task<DateTimeOffset> Now => GetNow();
+
+		private async Task<DateTimeOffset> GetNow()
+		{
+			await Task.Delay(1);
+			return DateTimeOffset.Now;
 		}
 	}
 }

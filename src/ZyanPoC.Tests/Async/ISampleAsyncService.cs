@@ -16,5 +16,7 @@ namespace ZyanPoC.Tests.Async
 		Task<string> Concatenate(params string[] strings);
 
 		Task<DateTime> Construct(int y, int m, int d);
+
+		Task<DateTimeOffset> Now { get; }
 	}
 }
