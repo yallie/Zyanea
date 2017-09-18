@@ -113,7 +113,7 @@ namespace ZyanPoC
 			throw new InvalidOperationException($"Message {messageId} already handled");
 		}
 
-		internal async Task GetAsyncTask(Guid messageId)
+		internal async Task GetAsyncResult(Guid messageId)
 		{
 			if (PendingMessages.TryGetValue(messageId, out var tcs))
 			{
@@ -121,6 +121,33 @@ namespace ZyanPoC
 				{
 					await tcs.Task;
 					return;
+				}
+				catch (AggregateException ex)
+				{
+					// skip extra AggregateException produced by the TaskCompletionSource
+					if (ex.InnerExceptions.Count == 1 && ex.InnerException != null)
+					{
+						// preserve the original stack trace
+						var info = ExceptionDispatchInfo.Capture(ex.InnerException);
+						info.Throw();
+					}
+
+					// more than one inner exception, throw as is
+					throw;
+				}
+			}
+
+			throw new InvalidOperationException($"Message {messageId} already handled");
+		}
+
+		internal async Task<TResult> GetAsyncResult<TResult>(Guid messageId)
+		{
+			if (PendingMessages.TryGetValue(messageId, out var tcs))
+			{
+				try
+				{
+					var result = await tcs.Task;
+					return (TResult)result;
 				}
 				catch (AggregateException ex)
 				{

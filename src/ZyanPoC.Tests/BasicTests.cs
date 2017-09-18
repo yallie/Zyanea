@@ -215,5 +215,59 @@ namespace ZyanPoC.Tests
 				}
 			}
 		}
+
+		[Fact]
+		public async Task ZyanClientCanCallAsyncTaskIntMethodWithParameters()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleAsyncService, SampleAsyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleAsyncService>();
+
+					// Assert.DoesNotThrow
+					var result = await proxy.Add(12300, 45);
+					Assert.Equal(12345, result);
+				}
+			}
+		}
+
+		[Fact]
+		public async Task ZyanClientCanCallAsyncTaskStringMethodWithParameters()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleAsyncService, SampleAsyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleAsyncService>();
+
+					// Assert.DoesNotThrow
+					var result = await proxy.Concatenate("Get", "Uninitialized", "Object");
+					Assert.Equal("GetUninitializedObject", result);
+				}
+			}
+		}
+
+		[Fact]
+		public async Task ZyanClientCanCallAsyncTaskDateTimeMethodWithParameters()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleAsyncService, SampleAsyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleAsyncService>();
+
+					// Assert.DoesNotThrow
+					var result = await proxy.Construct(2017, 09, 19);
+					Assert.Equal(new DateTime(2017, 09, 19), result);
+				}
+			}
+		}
 	}
 }

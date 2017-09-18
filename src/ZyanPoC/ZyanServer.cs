@@ -70,7 +70,19 @@ namespace ZyanPoC
 					if (task != null)
 					{
 						await task;
-						replyMessage.Result = null;
+
+						// handle Task<TResult>
+						var taskType = task.GetType().GetTypeInfo();
+						if (taskType.IsGenericType)
+						{
+							// TODO: cache resultProperty and convert it to a delegate
+							var resultProperty = taskType.GetProperty(nameof(Task<bool>.Result));
+							replyMessage.Result = resultProperty.GetValue(task);
+						}
+						else
+						{
+							replyMessage.Result = null;
+						}
 					}
 				}
 				catch (Exception ex)
