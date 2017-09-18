@@ -177,7 +177,7 @@ namespace ZyanPoC.Tests
 		}
 
 		[Fact]
-		public async Task ZyanClientCanCallAsyncTaskMethodAndItsActuallyExecuted()
+		public async Task ZyanClientCanCallShortAsyncTaskMethodAndItsActuallyExecuted()
 		{
 			using (var server = new ZyanServer(ServerUrl))
 			{
@@ -192,6 +192,26 @@ namespace ZyanPoC.Tests
 					// Assert.DoesNotThrow
 					await proxy.PerformShortOperation();
 					Assert.True(async.ShortOperationPerformed);
+				}
+			}
+		}
+
+		[Fact]
+		public async Task ZyanClientCanCallLongAsyncTaskMethodAndItsActuallyExecuted()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleAsyncService, SampleAsyncService>(Reuse.Singleton);
+				var async = server.Resolve<ISampleAsyncService>() as SampleAsyncService;
+				Assert.False(async.LongOperationPerformed);
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleAsyncService>();
+
+					// Assert.DoesNotThrow
+					await proxy.PerformLongOperation();
+					Assert.True(async.LongOperationPerformed);
 				}
 			}
 		}

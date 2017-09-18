@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using DryIoc;
 using DryIoc.MefAttributedModel;
 using Hyperion;
@@ -49,7 +50,7 @@ namespace ZyanPoC
 		private Serializer Serializer { get; } =
 			new Serializer(new SerializerOptions(preserveObjectReferences: true));
 
-		private void HandleReceivedMessage(object sender, MessageEventArgs e)
+		private async void HandleReceivedMessage(object sender, MessageEventArgs e)
 		{
 			using (var ms = new MemoryStream(e.Message.Frames[0]))
 			{
@@ -63,6 +64,14 @@ namespace ZyanPoC
 					var component = Container.Resolve(requestMessage.ComponentType);
 					var result = requestMessage.Method.Invoke(component, requestMessage.Arguments);
 					replyMessage.Result = result;
+
+					// handle task results
+					var task = result as Task;
+					if (task != null)
+					{
+						await task;
+						replyMessage.Result = null;
+					}
 				}
 				catch (Exception ex)
 				{

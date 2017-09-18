@@ -8,5 +8,7 @@ namespace ZyanPoC.Tests.Async
 	public interface ISampleAsyncService
 	{
 		Task PerformShortOperation();
+
+		Task PerformLongOperation();
 	}
 }

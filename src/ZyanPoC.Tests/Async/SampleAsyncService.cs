@@ -14,5 +14,13 @@ namespace ZyanPoC.Tests.Async
 			ShortOperationPerformed = true;
 			return Task.CompletedTask;
 		}
+
+		public bool LongOperationPerformed { get; private set; }
+
+		public async Task PerformLongOperation()
+		{
+			await Task.Delay(TimeSpan.FromMilliseconds(300));
+			LongOperationPerformed = true;
+		}
 	}
 }
