@@ -87,84 +87,32 @@ namespace ZyanPoC
 			}
 		}
 
-		internal object GetSyncResult(Guid messageId)
+		private Task<object> GetResultTask(Guid messageId)
 		{
 			if (PendingMessages.TryGetValue(messageId, out var tcs))
 			{
-				try
-				{
-					return tcs.Task.Result;
-				}
-				catch (AggregateException ex)
-				{
-					// skip extra AggregateException produced by the TaskCompletionSource
-					if (ex.InnerExceptions.Count == 1 && ex.InnerException != null)
-					{
-						// preserve the original stack trace
-						var info = ExceptionDispatchInfo.Capture(ex.InnerException);
-						info.Throw();
-					}
-
-					// more than one inner exception, throw as is
-					throw;
-				}
+				return tcs.Task;
 			}
 
 			throw new InvalidOperationException($"Message {messageId} already handled");
 		}
 
-		internal async Task GetAsyncResult(Guid messageId)
+		internal object GetSyncResult(Guid messageId)
 		{
-			if (PendingMessages.TryGetValue(messageId, out var tcs))
-			{
-				try
-				{
-					await tcs.Task;
-					return;
-				}
-				catch (AggregateException ex)
-				{
-					// skip extra AggregateException produced by the TaskCompletionSource
-					if (ex.InnerExceptions.Count == 1 && ex.InnerException != null)
-					{
-						// preserve the original stack trace
-						var info = ExceptionDispatchInfo.Capture(ex.InnerException);
-						info.Throw();
-					}
+			// task.Result wraps the exception in AggregateException
+			// task.GetAwaiter().GetResult() does not
+			return GetResultTask(messageId).GetAwaiter().GetResult();
+		}
 
-					// more than one inner exception, throw as is
-					throw;
-				}
-			}
-
-			throw new InvalidOperationException($"Message {messageId} already handled");
+		internal Task GetAsyncResult(Guid messageId)
+		{
+			return GetResultTask(messageId);
 		}
 
 		internal async Task<TResult> GetAsyncResult<TResult>(Guid messageId)
 		{
-			if (PendingMessages.TryGetValue(messageId, out var tcs))
-			{
-				try
-				{
-					var result = await tcs.Task;
-					return (TResult)result;
-				}
-				catch (AggregateException ex)
-				{
-					// skip extra AggregateException produced by the TaskCompletionSource
-					if (ex.InnerExceptions.Count == 1 && ex.InnerException != null)
-					{
-						// preserve the original stack trace
-						var info = ExceptionDispatchInfo.Capture(ex.InnerException);
-						info.Throw();
-					}
-
-					// more than one inner exception, throw as is
-					throw;
-				}
-			}
-
-			throw new InvalidOperationException($"Message {messageId} already handled");
+			var result = await GetResultTask(messageId);
+			return (TResult)result;
 		}
 	}
 }

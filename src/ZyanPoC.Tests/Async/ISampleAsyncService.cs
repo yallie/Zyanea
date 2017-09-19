@@ -11,6 +11,8 @@ namespace ZyanPoC.Tests.Async
 
 		Task PerformLongOperation();
 
+		Task ThrowException();
+
 		Task<int> Add(int a, int b);
 
 		Task<string> Concatenate(params string[] strings);

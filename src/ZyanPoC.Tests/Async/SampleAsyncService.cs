@@ -24,6 +24,12 @@ namespace ZyanPoC.Tests.Async
 			LongOperationPerformed = true;
 		}
 
+		public async Task ThrowException()
+		{
+			await Task.Delay(1);
+			throw new NotImplementedException(nameof(ISampleAsyncService));
+		}
+
 		public async Task<int> Add(int a, int b)
 		{
 			await Task.Delay(1);

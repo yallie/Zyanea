@@ -238,6 +238,27 @@ namespace ZyanPoC.Tests
 		}
 
 		[Fact]
+		public async Task ZyanClientCanCallAsyncTaskMethodAndCatchTheException()
+		{
+			using (var server = new ZyanServer(ServerUrl))
+			{
+				server.Register<ISampleAsyncService, SampleAsyncService>();
+
+				using (var client = new ZyanClient(ServerUrl))
+				{
+					var proxy = client.CreateProxy<ISampleAsyncService>();
+
+					var ex = await Assert.ThrowsAsync<NotImplementedException>(async () =>
+					{
+						await proxy.ThrowException();
+					});
+
+					Assert.Equal(nameof(ISampleAsyncService), ex.Message);
+				}
+			}
+		}
+
+		[Fact]
 		public async Task ZyanClientCanCallAsyncTaskIntMethodWithParameters()
 		{
 			using (var server = new ZyanServer(ServerUrl))

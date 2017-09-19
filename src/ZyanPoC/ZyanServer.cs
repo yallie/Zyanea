@@ -63,7 +63,6 @@ namespace ZyanPoC
 					// invoke the request message and get the result
 					var component = Container.Resolve(requestMessage.ComponentType);
 					var result = requestMessage.Method.Invoke(component, requestMessage.Arguments);
-					replyMessage.Result = result;
 
 					// handle task results
 					var task = result as Task;
@@ -83,6 +82,10 @@ namespace ZyanPoC
 						{
 							replyMessage.Result = null;
 						}
+					}
+					else
+					{
+						replyMessage.Result = result;
 					}
 				}
 				catch (Exception ex)
