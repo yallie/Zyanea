@@ -1,6 +1,7 @@
 # Zyan vNext PoC
 
-[![Build status](https://ci.appveyor.com/api/projects/status/3pctff9644pdxx3i/branch/master?svg=true)](https://ci.appveyor.com/project/yallie/messagewire/branch/master)
+[![Appveyor build status](https://ci.appveyor.com/api/projects/status/3pctff9644pdxx3i/branch/master?svg=true)](https://ci.appveyor.com/project/yallie/messagewire/branch/master)
+[![Travis-CI build status](https://travis-ci.org/yallie/MessageWire.svg?branch=master)](https://travis-ci.org/yallie/MessageWire)
 
 Zyan vNext PoC is a (surprise!) proof-of concept for the next version of [Zyan Communication Framework](http://zyan.com.de).
 
