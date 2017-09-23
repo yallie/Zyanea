@@ -1,0 +1,44 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.26730.15
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{B2B7F7CF-457D-4EBE-B34C-7AF0B49C0B54}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{4A54949E-A48E-44EF-8BB8-6BECCA868E2E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".docs", ".docs", "{2A8A94FC-650A-41AE-9012-CC80CBDB70B8}"
+	ProjectSection(SolutionItems) = preProject
+		..\README.md = ..\README.md
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Zyanea", "Zyanea\Zyanea.csproj", "{9B00B692-ADD7-461D-9967-012716B1D350}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Zyanea.Tests", "Zyanea.Tests\Zyanea.Tests.csproj", "{D9FEBEAF-6829-4646-AF59-34EF01E1A09B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9B00B692-ADD7-461D-9967-012716B1D350}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B00B692-ADD7-461D-9967-012716B1D350}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B00B692-ADD7-461D-9967-012716B1D350}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B00B692-ADD7-461D-9967-012716B1D350}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9FEBEAF-6829-4646-AF59-34EF01E1A09B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9FEBEAF-6829-4646-AF59-34EF01E1A09B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9FEBEAF-6829-4646-AF59-34EF01E1A09B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9FEBEAF-6829-4646-AF59-34EF01E1A09B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{9B00B692-ADD7-461D-9967-012716B1D350} = {B2B7F7CF-457D-4EBE-B34C-7AF0B49C0B54}
+		{D9FEBEAF-6829-4646-AF59-34EF01E1A09B} = {B2B7F7CF-457D-4EBE-B34C-7AF0B49C0B54}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4D78F946-1236-4D86-9C64-1353CC6D049E}
+	EndGlobalSection
+EndGlobal

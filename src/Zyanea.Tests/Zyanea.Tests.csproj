@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Castle.Core" Version="4.1.1" />
+    <PackageReference Include="Castle.Core.AsyncInterceptor" Version="1.3.0" />
+    <PackageReference Include="DryIoc.dll" Version="2.12.2" />
+    <PackageReference Include="DryIoc.MefAttributedModel.dll" Version="3.1.3" />
+    <PackageReference Include="Hyperion" Version="0.9.6" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.3.0" />
+    <PackageReference Include="xunit" Version="2.2.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Zyanea\Zyanea.csproj" />
+  </ItemGroup>
+
+</Project>

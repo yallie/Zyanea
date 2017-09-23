@@ -7,7 +7,4 @@ before_build:
 build:
   verbosity: minimal
 test_script:
-- cmd: >-
-    dotnet test src/MessageWire.Tests
-
-    dotnet test src/ZyanPoc.Tests
+- cmd: dotnet test src/Zyanea.Tests

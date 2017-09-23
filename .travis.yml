@@ -15,6 +15,5 @@ addons:
 script:
  - dotnet restore src
  - dotnet build src
- - dotnet test src/MessageWire.Tests
- - dotnet test src/ZyanPoC.Tests
+ - dotnet test src/Zyanea.Tests
 
