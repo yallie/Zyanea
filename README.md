@@ -22,6 +22,30 @@ Non-goals:
 - Obsolete versions of .NET framework
 - Transport-level compatibility with Zyan 2.x
 
+## Code sample
+
+```c#
+// shared library
+public interface IHelloService
+{
+    Task SayHello(string message);
+}
+
+// server
+using (var server = new ZyanServer("tcp://127.0.0.1:5800"))
+{
+    server.Register<IHelloService, HelloService>();
+    Console.ReadLine();
+}
+
+// client
+using (var client = new ZyanClient("tcp://127.0.0.1:5800"))
+{
+    var proxy = client.CreateProxy<IHelloService>();
+    await proxy.SayHello("World");
+}
+```
+
 # Technology stack currently used:
 
 - NetMQ for transport layer (ZeroMQ protocol)
