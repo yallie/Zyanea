@@ -45,7 +45,6 @@ namespace Zyanea.Tests
                     {
                         var watch = Stopwatch.StartNew();
 
-
                         for (var k = 0; k < msgQty; k++)
                             reply = await proxy.Add(1, 2);
 
