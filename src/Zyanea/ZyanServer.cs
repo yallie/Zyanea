@@ -13,11 +13,12 @@ namespace Zyanea
 {
     public class ZyanServer : IDisposable
     {
-        private readonly IDictionary<string, Func<Task, object>> _cachedResults;
+        private static readonly IDictionary<string, Func<Task, object>> _cachedResults;
+
+        static ZyanServer() => _cachedResults = new ConcurrentDictionary<string, Func<Task, object>>();
+		
         public ZyanServer(string serverUrl = null)
         {
-            _cachedResults = new ConcurrentDictionary<string, Func<Task, object>>();
-
             if (!string.IsNullOrWhiteSpace(serverUrl))
             {
                 Start(serverUrl);
